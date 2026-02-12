@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "884698001403",
+    "project_id": "fapauto-dee24",
+    "storage_bucket": "fapauto-dee24.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:884698001403:android:975812141a82351b1d255e",
+        "android_client_info": {
+          "package_name": "com.example.flutter_application_1"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCFS1fLbHXdhx_oaN3OFB7hMPmTRNe1DmU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
