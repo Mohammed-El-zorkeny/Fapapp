@@ -1,20 +1,43 @@
 import 'package:flutter/material.dart';
 
 class AppColors {
-  // Brand Colors from Images
-  static const Color primary = Color(0xFFC62828); // The exact Red on buttons
-  static const Color primaryDark = Color(0xFFB71C1C);
-  static const Color primaryLight = Color(0xFFEF5350);
+  // Modern Gradient Brand Colors
+  static const Color primary = Color(0xFFE21C34); // Vibrant Red
+  static const Color primaryDark = Color(0xFF500B28); // Deep Burgundy
+  static const Color primaryLight = Color(0xFFFF4757); // Light Red
+
+  // Gradient Definitions
+  static const LinearGradient primaryGradient = LinearGradient(
+    colors: [Color(0xFFE21C34), Color(0xFF500B28)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  static const LinearGradient primaryGradientReverse = LinearGradient(
+    colors: [Color(0xFF500B28), Color(0xFFE21C34)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
 
   // Neutral Colors
-  static const Color background = Color(0xFFFFFFFF);
+  static const Color background = Color(0xFFFAFAFA);
   static const Color surface = Color(0xFFFFFFFF);
-  static const Color textDark = Color(0xFF2D2D2D);
+  static const Color surfaceLight = Color(0xFFF5F5F5);
+  static const Color textDark = Color(0xFF1A1A1A);
+  static const Color textMedium = Color(0xFF4A4A4A);
   static const Color textLight = Color(0xFF757575);
-  static const Color divider = Color(0xFFF0F0F0);
+  static const Color divider = Color(0xFFE0E0E0);
+  static const Color border = Color(0xFFEEEEEE);
 
   // Functional Colors
-  static const Color error = Color(0xFFD32F2F);
-  static const Color success = Color(0xFF43A047);
-  static const Color accent = Color(0xFFC62828);
+  static const Color error = Color(0xFFE21C34);
+  static const Color success = Color(0xFF4CAF50);
+  static const Color warning = Color(0xFFFF9800);
+  static const Color info = Color(0xFF2196F3);
+  static const Color accent = Color(0xFFE21C34);
+
+  // Shadow Colors
+  static Color shadowLight = Colors.black.withOpacity(0.05);
+  static Color shadowMedium = Colors.black.withOpacity(0.1);
+  static Color primaryShadow = const Color(0xFFE21C34).withOpacity(0.3);
 }

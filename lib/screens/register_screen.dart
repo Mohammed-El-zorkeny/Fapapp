@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../utils/app_colors.dart';
+import '../widgets/custom_button.dart';
 import 'success_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -37,7 +38,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
+                          color: AppColors.shadowLight,
                           blurRadius: 20,
                           offset: const Offset(0, 10),
                         ),
@@ -98,30 +99,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                 const SizedBox(height: 40),
 
-                SizedBox(
-                  width: double.infinity,
-                  height: 55,
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (c) => const SuccessScreen()),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(15),
-                      ),
-                      elevation: 5,
-                      shadowColor: AppColors.primary.withOpacity(0.4),
-                    ),
-                    child: const Text(
-                      'إنشاء الحساب',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
+                CustomButton(
+                  text: 'إنشاء الحساب',
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (c) => const SuccessScreen()),
                   ),
                 ),
 

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../models/price_list_model.dart';
 import '../services/api_service.dart';
 import '../utils/app_colors.dart';
+import '../utils/screenshot_protection_mixin.dart';
 import 'report_details_screen.dart';
 import 'secure_pdf_viewer.dart';
 
@@ -13,17 +15,20 @@ class ReportsScreen extends StatefulWidget {
   State<ReportsScreen> createState() => _ReportsScreenState();
 }
 
-class _ReportsScreenState extends State<ReportsScreen> {
+class _ReportsScreenState extends State<ReportsScreen>
+    with ScreenshotProtectionMixin {
   final ApiService _apiService = ApiService();
   List<PriceListModel> _priceLists = [];
   List<PriceListModel> _filteredPriceLists = [];
   bool _isLoading = true;
   String? _errorMessage;
   final TextEditingController _searchController = TextEditingController();
+  bool _isSearchVisible = false;
 
   @override
   void initState() {
     super.initState();
+    initScreenshotProtection();
     _fetchPriceLists();
     _searchController.addListener(_onSearchChanged);
   }
@@ -31,6 +36,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
   @override
   void dispose() {
     _searchController.dispose();
+    disposeScreenshotProtection();
     super.dispose();
   }
 
@@ -60,7 +66,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
       });
     } else {
       if (result['authError'] == true) {
-        // Handle Logout if needed, for now just show error
         setState(() {
           _errorMessage = 'جلسة غير صالحة، يرجى تسجيل الدخول مرة أخرى';
           _isLoading = false;
@@ -74,57 +79,142 @@ class _ReportsScreenState extends State<ReportsScreen> {
     }
   }
 
-  Future<void> _showActionDialog(
-    BuildContext context,
-    PriceListModel list,
-  ) async {
-    showDialog(
+  void _showActionSheet(BuildContext context, PriceListModel list) {
+    showModalBottomSheet(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text(
-          'اختر إجراء',
-          textAlign: TextAlign.center,
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildActionBtn(
-              context,
-              'عرض الكشف',
-              Icons.picture_as_pdf,
-              () => _openSecurePdf(context, list),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: Directionality(
+            textDirection: TextDirection.rtl,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Handle
+                Container(
+                  margin: const EdgeInsets.only(top: 12),
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
+                ),
+                const SizedBox(height: 20),
+                // Title
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(colors: [Color(0xFF6C5CE7), Color(0xFFA29BFE)]),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.description_outlined, color: Colors.white, size: 22),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(list.nameAr, style: GoogleFonts.cairo(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textDark)),
+                            if (list.messageAr.isNotEmpty)
+                              Text(list.messageAr, style: GoogleFonts.cairo(fontSize: 11, color: AppColors.textLight), maxLines: 1, overflow: TextOverflow.ellipsis),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                // Actions
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Column(
+                    children: [
+                      // View PDF
+                      _buildSheetAction(
+                        icon: Icons.picture_as_pdf_outlined,
+                        label: 'عرض الكشف',
+                        subtitle: 'عرض ملف PDF للكشف',
+                        color: AppColors.primary,
+                        gradientColors: [AppColors.primary, const Color(0xFFFF6B6B)],
+                        onTap: () {
+                          Navigator.pop(context);
+                          _openSecurePdf(context, list);
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      // Create Order
+                      _buildSheetAction(
+                        icon: Icons.add_shopping_cart_outlined,
+                        label: 'إنشاء طلب جديد',
+                        subtitle: 'إنشاء طلب من هذا الكشف',
+                        color: const Color(0xFF00B894),
+                        gradientColors: [const Color(0xFF00B894), const Color(0xFF55EFC4)],
+                        onTap: () {
+                          Navigator.pop(context);
+                          _navigateToDetails(context, list);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(height: MediaQuery.of(context).padding.bottom + 24),
+              ],
             ),
-            const SizedBox(height: 10),
-            _buildActionBtn(
-              context,
-              'إنشاء طلب جديد',
-              Icons.add_shopping_cart,
-              () => _navigateToDetails(context, list),
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildActionBtn(
-    BuildContext context,
-    String label,
-    IconData icon,
-    VoidCallback onTap,
-  ) {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton.icon(
-        onPressed: onTap,
-        icon: Icon(icon),
-        label: Text(label),
-        style: ElevatedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
+  Widget _buildSheetAction({
+    required IconData icon,
+    required String label,
+    required String subtitle,
+    required Color color,
+    required List<Color> gradientColors,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.04),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: color.withOpacity(0.12)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(colors: gradientColors),
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: [BoxShadow(color: color.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 3))],
+                ),
+                child: Icon(icon, color: Colors.white, size: 20),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label, style: GoogleFonts.cairo(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textDark)),
+                    Text(subtitle, style: GoogleFonts.cairo(fontSize: 11, color: AppColors.textLight)),
+                  ],
+                ),
+              ),
+              Icon(Icons.arrow_back_ios_new, size: 14, color: color.withOpacity(0.5)),
+            ],
           ),
         ),
       ),
@@ -132,180 +222,289 @@ class _ReportsScreenState extends State<ReportsScreen> {
   }
 
   void _openSecurePdf(BuildContext context, PriceListModel list) {
-    Navigator.pop(context); // Close Action Dialog
-
     if (list.priceListUrlPdf.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('لا يوجد ملف PDF متاح لهذا الكشف')),
+        SnackBar(content: Text('لا يوجد ملف PDF متاح لهذا الكشف', style: GoogleFonts.cairo())),
       );
       return;
     }
 
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) =>
-            SecurePdfViewer(title: list.nameAr, filePath: list.priceListUrlPdf),
-      ),
-    );
+    Navigator.push(context, MaterialPageRoute(
+      builder: (context) => SecurePdfViewer(title: list.nameAr, filePath: list.priceListUrlPdf),
+    ));
   }
 
   void _navigateToDetails(BuildContext context, PriceListModel list) {
-    Navigator.pop(context); // Close Dialog
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (c) => ReportDetailsScreen(priceListId: list.id),
-      ),
-    );
+    Navigator.push(context, MaterialPageRoute(
+      builder: (c) => ReportDetailsScreen(priceListId: list.id, priceListName: list.nameAr),
+    ));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        centerTitle: true,
-        leading: const SizedBox.shrink(),
-        title: const Text(
-          'الكشوفات',
-          style: TextStyle(
-            color: AppColors.textDark,
-            fontWeight: FontWeight.bold,
-            fontSize: 20,
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        child: Directionality(
+          textDirection: TextDirection.rtl,
+          child: Column(
+            children: [
+              // Custom AppBar
+              _buildAppBar(),
+              // Search
+              if (_isSearchVisible) _buildSearchBar(),
+              // Stats
+              _buildStatsBar(),
+              // List
+              Expanded(child: _buildReportsList()),
+            ],
           ),
         ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 16.0),
-            child: _buildHeaderIcon(
-              Icons.arrow_forward_ios,
-              onTap: () => Navigator.pop(context),
+      ),
+    );
+  }
+
+  Widget _buildAppBar() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
+              ),
+              child: const Icon(Icons.arrow_forward_ios, color: AppColors.textDark, size: 18),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Text('الكشوفات', style: GoogleFonts.cairo(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.textDark)),
+          ),
+          GestureDetector(
+            onTap: () {
+              setState(() {
+                _isSearchVisible = !_isSearchVisible;
+                if (!_isSearchVisible) {
+                  _searchController.clear();
+                }
+              });
+            },
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: _isSearchVisible ? AppColors.primary.withOpacity(0.1) : Colors.white,
+                shape: BoxShape.circle,
+                boxShadow: _isSearchVisible ? [] : [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
+              ),
+              child: Icon(
+                _isSearchVisible ? Icons.close : Icons.search,
+                color: _isSearchVisible ? AppColors.primary : AppColors.textDark,
+                size: 20,
+              ),
+            ),
+          ),
+        ],
+      ).animate().fadeIn(duration: 300.ms),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.primary.withOpacity(0.15)),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 3))],
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.search, color: AppColors.primary, size: 20),
+            const SizedBox(width: 8),
+            Expanded(
+              child: TextField(
+                controller: _searchController,
+                style: GoogleFonts.cairo(fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: 'ابحث عن كشف بالاسم أو الرقم...',
+                  hintStyle: GoogleFonts.cairo(fontSize: 13, color: Colors.grey),
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ),
+            if (_searchController.text.isNotEmpty)
+              GestureDetector(
+                onTap: () {
+                  _searchController.clear();
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(color: Colors.grey.shade200, shape: BoxShape.circle),
+                  child: const Icon(Icons.close, size: 14, color: Colors.grey),
+                ),
+              ),
+          ],
+        ),
+      ),
+    ).animate().fadeIn(duration: 200.ms).slideY(begin: -0.2, end: 0);
+  }
+
+  Widget _buildStatsBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+      child: Row(
+        children: [
+          Text(
+            'الكشوفات المتاحة',
+            style: GoogleFonts.cairo(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textLight),
+          ),
+          const Spacer(),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              '${_filteredPriceLists.length} كشف',
+              style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primary),
+            ),
+          ),
+        ],
+      ).animate().fadeIn(delay: 150.ms),
+    );
+  }
+
+  Widget _buildReportsList() {
+    if (_isLoading) {
+      return ListView.builder(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        itemCount: 4,
+        itemBuilder: (c, i) => _buildShimmerCard(),
+      );
+    }
+
+    if (_errorMessage != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline, size: 56, color: Colors.grey.shade300),
+            const SizedBox(height: 16),
+            Text(_errorMessage!, style: GoogleFonts.cairo(color: Colors.grey, fontSize: 14)),
+            const SizedBox(height: 16),
+            GestureDetector(
+              onTap: _fetchPriceLists,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+                decoration: BoxDecoration(gradient: AppColors.primaryGradient, borderRadius: BorderRadius.circular(12)),
+                child: Text('إعادة المحاولة', style: GoogleFonts.cairo(color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_filteredPriceLists.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.description_outlined, size: 56, color: Colors.grey.shade300),
+            const SizedBox(height: 12),
+            Text('لا توجد كشوفات', style: GoogleFonts.cairo(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textMedium)),
+            const SizedBox(height: 6),
+            Text('لا توجد بيانات متاحة حالياً', style: GoogleFonts.cairo(fontSize: 13, color: AppColors.textLight)),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _fetchPriceLists,
+      color: AppColors.primary,
+      child: ListView.builder(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        itemCount: _filteredPriceLists.length,
+        itemBuilder: (context, index) {
+          return _buildReportCard(context, _filteredPriceLists[index], index);
+        },
+      ),
+    );
+  }
+
+  Widget _buildShimmerCard() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+      child: Row(
+        children: [
+          Container(width: 48, height: 48, decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(12))),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(height: 14, width: 140, decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(4))),
+                const SizedBox(height: 8),
+                Container(height: 10, width: 200, decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(4))),
+              ],
             ),
           ),
         ],
       ),
-      body: Directionality(
-        textDirection: TextDirection.rtl,
-        child: Column(
-          children: [
-            // Search Bar
-            Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF5F5F5),
-                  borderRadius: BorderRadius.circular(15),
-                ),
-                child: TextField(
-                  controller: _searchController,
-                  decoration: const InputDecoration(
-                    hintText: 'ابحث عن كشف...',
-                    hintStyle: TextStyle(color: Colors.grey, fontSize: 14),
-                    prefixIcon: Icon(Icons.search, color: Colors.grey),
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(vertical: 15),
-                  ),
-                ),
-              ),
-            ),
-
-            // Section Title
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20.0),
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: Text(
-                  'الكشوفات المتاحة',
-                  style: TextStyle(
-                    color: Colors.grey,
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 15),
-
-            // Results
-            Expanded(
-              child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _errorMessage != null
-                  ? Center(child: Text(_errorMessage!))
-                  : _filteredPriceLists.isEmpty
-                  ? const Center(child: Text('لا توجد بيانات'))
-                  : ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      itemCount: _filteredPriceLists.length,
-                      itemBuilder: (context, index) {
-                        return _buildReportCard(
-                          context,
-                          _filteredPriceLists[index],
-                        );
-                      },
-                    ),
-            ),
-          ],
-        ),
-      ),
-    );
+    ).animate(onPlay: (c) => c.repeat()).shimmer(duration: 1200.ms, color: Colors.grey.shade200);
   }
 
-  Widget _buildHeaderIcon(IconData icon, {Color? color, VoidCallback? onTap}) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: color?.withOpacity(0.05) ?? Colors.grey.shade50,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade100),
-        ),
-        child: Icon(icon, color: color ?? AppColors.textDark, size: 20),
-      ),
-    );
-  }
+  Widget _buildReportCard(BuildContext context, PriceListModel list, int index) {
+    // Alternate gradient colors for visual variety
+    final List<List<Color>> cardGradients = [
+      [const Color(0xFF6C5CE7), const Color(0xFFA29BFE)],
+      [const Color(0xFF0984E3), const Color(0xFF74B9FF)],
+      [const Color(0xFFE17055), const Color(0xFFFAB1A0)],
+      [const Color(0xFF00B894), const Color(0xFF55EFC4)],
+    ];
+    final gradient = cardGradients[index % cardGradients.length];
 
-  Widget _buildReportCard(BuildContext context, PriceListModel list) {
     return GestureDetector(
-      onTap: () => _showActionDialog(context, list),
+      onTap: () => _showActionSheet(context, list),
       child: Container(
-        margin: const EdgeInsets.only(bottom: 15),
+        margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
           boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.03),
-              blurRadius: 15,
-              offset: const Offset(0, 5),
-            ),
+            BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 5)),
           ],
           border: Border.all(color: Colors.grey.shade50),
         ),
         child: Row(
           children: [
-            // Logo Icon (New)
+            // Gradient icon
             Container(
-              width: 50,
-              height: 50,
+              width: 48,
+              height: 48,
               decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(10),
+                gradient: LinearGradient(colors: gradient, begin: Alignment.topLeft, end: Alignment.bottomRight),
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [BoxShadow(color: gradient[0].withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 3))],
               ),
-              child: const Icon(
-                Icons.description,
-                color: AppColors.primary,
-                size: 30,
+              child: const Center(
+                child: Icon(Icons.description_outlined, color: Colors.white, size: 24),
               ),
             ),
-            const SizedBox(width: 15),
-
+            const SizedBox(width: 14),
             // Info
             Expanded(
               child: Column(
@@ -313,29 +512,32 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 children: [
                   Text(
                     list.nameAr,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textDark,
-                    ),
+                    style: GoogleFonts.cairo(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textDark),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 3),
                   Text(
-                    list.messageAr,
-                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    list.messageAr.isNotEmpty ? list.messageAr : list.autoNumber,
+                    style: GoogleFonts.cairo(fontSize: 11, color: AppColors.textLight),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
             ),
-            // Leading
-            Icon(
-              Icons.arrow_back_ios_new,
-              color: Colors.grey.shade300,
-              size: 16,
+            // Action arrow
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(Icons.arrow_back_ios_new, color: Colors.grey.shade400, size: 14),
             ),
           ],
         ),
       ),
-    ).animate().fadeIn().moveX();
+    ).animate().fadeIn(delay: (index * 50).ms, duration: 300.ms).slideX(begin: 0.05, end: 0);
   }
 }

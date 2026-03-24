@@ -57,10 +57,10 @@ class PriceListItemModel {
 
   factory PriceListItemModel.fromJson(Map<String, dynamic> json) {
     return PriceListItemModel(
-      id: json['id'] ?? 0,
+      id: json['itemId'] ?? json['id'] ?? 0,
       itemCode: json['itemCode'] ?? '',
       nameAr: json['nameAr'] ?? '',
-      itemSide: json['itemSide'] ?? '', // Default to empty if missing
+      itemSide: json['itemSide'] ?? '',
       price: (json['price'] as num?)?.toDouble() ?? 0.0,
       minQty: json['minQty'] ?? 0,
     );

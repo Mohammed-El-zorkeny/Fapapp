@@ -3,17 +3,17 @@
 <plist version="1.0">
 <dict>
 	<key>API_KEY</key>
-	<string>AIzaSyC8PbtpwnQk25WdSQ8eJgFNqSRz_q9GJrY</string>
+	<string>AIzaSyAi2CkgtzudVULiepTTeHu0_S2FgCFy9_I</string>
 	<key>GCM_SENDER_ID</key>
-	<string>884698001403</string>
+	<string>392047337628</string>
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>com.example.flutterApplication1</string>
+	<string>com.fapauto.app</string>
 	<key>PROJECT_ID</key>
-	<string>fapauto-dee24</string>
+	<string>fap-auto-80a6c</string>
 	<key>STORAGE_BUCKET</key>
-	<string>fapauto-dee24.firebasestorage.app</string>
+	<string>fap-auto-80a6c.firebasestorage.app</string>
 	<key>IS_ADS_ENABLED</key>
 	<false></false>
 	<key>IS_ANALYTICS_ENABLED</key>
@@ -25,6 +25,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:884698001403:ios:db65683f2cca162e1d255e</string>
+	<string>1:392047337628:ios:6b4b31d5c3ddc541b70d59</string>
 </dict>
 </plist>

@@ -39,6 +39,18 @@ class StorageService {
     return userData?['nameArabic'];
   }
 
+  // Save user type
+  Future<void> saveUserType(String userType) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('user_type', userType);
+  }
+
+  // Get user type
+  Future<String?> getUserType() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('user_type');
+  }
+
   // Clear all data (Logout)
   Future<void> clearAll() async {
     final prefs = await SharedPreferences.getInstance();
