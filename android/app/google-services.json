@@ -7,9 +7,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:392047337628:android:4cc6536c9f2f67c3b70d59",
+        "mobilesdk_app_id": "1:392047337628:android:1bbb8ea7feb6424db70d59",
         "android_client_info": {
-          "package_name": "com.fapauto.app"
+          "package_name": "com.fapauto.parts"
         }
       },
       "oauth_client": [],

@@ -7,10 +7,11 @@ import 'package:google_fonts/google_fonts.dart';
 import 'screens/splash_screen.dart';
 import 'utils/app_colors.dart';
 import 'services/notification_service.dart';
+import 'firebase_options.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   print("Handling a background message: ${message.messageId}");
 }
 
@@ -18,7 +19,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Initialize Firebase
-  await Firebase.initializeApp();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   // Set up background messaging
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
@@ -35,7 +36,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'FAP Auto Body Parts',
+      title: 'Fap Auto Parts',
       navigatorKey: NotificationService.navigatorKey,
       debugShowCheckedModeBanner: false,
       theme: ThemeData(

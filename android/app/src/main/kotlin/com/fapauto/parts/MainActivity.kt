@@ -1,4 +1,4 @@
-package com.fapauto.app
+package com.fapauto.parts
 
 import io.flutter.embedding.android.FlutterActivity
 import android.view.WindowManager.LayoutParams

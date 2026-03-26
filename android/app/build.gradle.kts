@@ -16,9 +16,8 @@ if (keyPropertiesFile.exists()) {
 }
 
 android {
-    namespace = "com.fapauto.app"
+    namespace = "com.fapauto.parts"
     compileSdk = 36
-    ndkVersion = "28.2.13676358"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -40,7 +39,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.fapauto.app"
+        applicationId = "com.fapauto.parts"
         minSdk = flutter.minSdkVersion
         targetSdk = 36
         versionCode = flutter.versionCode
@@ -56,6 +55,8 @@ android {
         }
     }
 
+
+    
     packaging {
         jniLibs {
             useLegacyPackaging = true
