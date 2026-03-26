@@ -1,41 +1,54 @@
 import Flutter
 import UIKit
+import GoogleMaps
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
-  private var blurView: UIVisualEffectView?
-  
-  override func application(
+    private var blurView: UIVisualEffectView?
+
+    override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
-  ) -> Bool {
-    GeneratedPluginRegistrant.register(with: self)
-    return super.application(application, didFinishLaunchingWithOptions: launchOptions)
-  }
-  
-  // Hide content when app goes to background (prevents screenshot in app switcher)
-  override func applicationWillResignActive(_ application: UIApplication) {
-    addBlurEffect()
-  }
-  
-  override func applicationDidBecomeActive(_ application: UIApplication) {
-    removeBlurEffect()
-  }
-  
-  private func addBlurEffect() {
-    guard let window = self.window else { return }
-    
-    let blurEffect = UIBlurEffect(style: .dark)
-    let blurView = UIVisualEffectView(effect: blurEffect)
-    blurView.frame = window.bounds
-    blurView.tag = 999 // Tag to identify later
-    
-    window.addSubview(blurView)
-    self.blurView = blurView
-  }
-  
-  private func removeBlurEffect() {
-    blurView?.removeFromSuperview()
-    blurView = nil
-  }
+    ) -> Bool {
+
+        // ✅ Google Maps API Key
+        GMSServices.provideAPIKey("AIzaSyA8NdDD7cUCWx_OIvDi0A8EApwA2Bll_sg")
+
+        GeneratedPluginRegistrant.register(with: self)
+        return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+    }
+
+    override func applicationWillResignActive(_ application: UIApplication) {
+        addBlurEffect()
+    }
+
+    override func applicationDidEnterBackground(_ application: UIApplication) {
+        addBlurEffect()
+    }
+
+    override func applicationDidBecomeActive(_ application: UIApplication) {
+        removeBlurEffect()
+    }
+
+    private func addBlurEffect() {
+        guard let window = UIApplication.shared.windows.first else { return }
+
+        if window.viewWithTag(999) != nil { return }
+
+        let blurEffect = UIBlurEffect(style: .dark)
+        let blurView = UIVisualEffectView(effect: blurEffect)
+        blurView.frame = window.bounds
+        blurView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        blurView.tag = 999
+
+        window.addSubview(blurView)
+        self.blurView = blurView
+    }
+
+    private func removeBlurEffect() {
+        guard let window = UIApplication.shared.windows.first else { return }
+
+        window.viewWithTag(999)?.removeFromSuperview()
+        blurView = nil
+    }
 }

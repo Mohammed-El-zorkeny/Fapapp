@@ -11,7 +11,9 @@ import 'firebase_options.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await Firebase.initializeApp(
+      // options: DefaultFirebaseOptions.currentPlatform
+  );
   print("Handling a background message: ${message.messageId}");
 }
 
@@ -19,7 +21,9 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Initialize Firebase
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await Firebase.initializeApp(
+      // options: DefaultFirebaseOptions.currentPlatform
+  );
 
   // Set up background messaging
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
