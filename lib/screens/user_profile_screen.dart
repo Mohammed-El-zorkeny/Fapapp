@@ -373,8 +373,109 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             ),
           ),
         ),
+
+        const SizedBox(height: 12),
+
+        // Delete Account Button
+        Container(
+          width: double.infinity,
+          height: 52,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.red.shade300, width: 1.5),
+            boxShadow: [BoxShadow(color: Colors.red.withOpacity(0.08), blurRadius: 10, offset: const Offset(0, 4))],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(14),
+              onTap: _deleteAccount,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.delete_forever_rounded, color: Colors.red.shade400, size: 20),
+                  const SizedBox(width: 8),
+                  Text('حذف حسابي', style: GoogleFonts.cairo(color: Colors.red.shade400, fontWeight: FontWeight.bold, fontSize: 15)),
+                ],
+              ),
+            ),
+          ),
+        ),
       ],
     ).animate().fadeIn(delay: 600.ms);
+  }
+
+  Future<void> _deleteAccount() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        icon: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.red.shade50,
+            shape: BoxShape.circle,
+          ),
+          child: Icon(Icons.delete_forever_rounded, color: Colors.red.shade400, size: 32),
+        ),
+        title: Text(
+          'حذف الحساب',
+          style: GoogleFonts.cairo(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.red.shade600),
+          textAlign: TextAlign.center,
+        ),
+        content: Text(
+          'سيتم حذف جميع معلوماتك من على التطبيق',
+          style: GoogleFonts.cairo(fontSize: 15, color: Colors.grey.shade700, height: 1.5),
+          textAlign: TextAlign.center,
+        ),
+        actionsAlignment: MainAxisAlignment.center,
+        actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            child: Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: Colors.grey.shade300),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    onPressed: () => Navigator.pop(context, false),
+                    child: Text('إلغاء', style: GoogleFonts.cairo(color: Colors.grey.shade600, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red.shade400,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      elevation: 0,
+                    ),
+                    onPressed: () => Navigator.pop(context, true),
+                    child: Text('حذف', style: GoogleFonts.cairo(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      final storage = StorageService();
+      await storage.clearAll();
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        (route) => false,
+      );
+    }
   }
 
   void _showEditLocationModal() {
