@@ -22,7 +22,7 @@ void main() async {
 
   // Initialize Firebase
   await Firebase.initializeApp(
-      // options: DefaultFirebaseOptions.currentPlatform
+      options: DefaultFirebaseOptions.currentPlatform
   );
 
   // Set up background messaging
