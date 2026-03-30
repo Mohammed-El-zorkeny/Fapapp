@@ -4,6 +4,7 @@ import GoogleMaps
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
+    var field = UITextField()
 
     private var blurView: UIVisualEffectView?
     private let secureViewTag = 9999
@@ -17,13 +18,13 @@ import GoogleMaps
 
         GMSServices.provideAPIKey("AIzaSyA8NdDD7cUCWx_OIvDi0A8EApwA2Bll_sg")
         GeneratedPluginRegistrant.register(with: self)
-
-        // تفعيل حماية منع التصوير (الطبقة المؤمنة)
+        #if !DEBUG
+        addSecuredView()
+        #endif
         DispatchQueue.main.async {
             self.enableScreenshotProtection(true)
         }
 
-        // مراقبة لقطة الشاشة
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(userDidTakeScreenshot),
@@ -31,7 +32,6 @@ import GoogleMaps
             object: nil
         )
 
-        // مراقبة تسجيل الشاشة
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(screenCaptureChanged),
@@ -44,14 +44,15 @@ import GoogleMaps
 
     override func applicationWillResignActive(_ application: UIApplication) {
         addBlurEffect()
+        field.isSecureTextEntry = false
     }
 
     override func applicationDidBecomeActive(_ application: UIApplication) {
         removeBlurEffect()
         screenCaptureChanged()
+        field.isSecureTextEntry = true
     }
 
-    // MARK: - Screenshot Prevention (الخدعة التقنية لطبقة الصور)
     private func enableScreenshotProtection(_ enable: Bool) {
         DispatchQueue.main.async {
             guard let window = self.getKeyWindow() else { return }
@@ -72,7 +73,6 @@ import GoogleMaps
         }
     }
 
-    // ✅ التعديل الجديد: حجب الشاشة عند التقاط لقطة شاشة
     @objc func userDidTakeScreenshot() {
         DispatchQueue.main.async {
             self.blockScreen()
@@ -140,5 +140,21 @@ import GoogleMaps
         return UIApplication.shared.connectedScenes
         .compactMap { ($0 as? UIWindowScene)?.keyWindow }
         .first
+    }
+
+    private func addSecuredView() {
+        guard let window = self.window else { return }  // ✅ unwrap safely
+
+        if !window.subviews.contains(field) {
+            field.translatesAutoresizingMaskIntoConstraints = false
+            window.addSubview(field)
+
+            NSLayoutConstraint.activate([
+                field.centerYAnchor.constraint(equalTo: window.centerYAnchor),
+                field.centerXAnchor.constraint(equalTo: window.centerXAnchor)
+            ])
+
+            window.layer.addSublayer(field.layer)
+        }
     }
 }
