@@ -30,13 +30,14 @@ class DefaultFirebaseOptions {
     storageBucket: 'fap-auto-80a6c.firebasestorage.app',
   );
 
-  // Update these values if you add iOS to Firebase console
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyABMZT8aOcxo_UbPXeqZxlYb0t03rKIC1c',
-    appId: '1:392047337628:ios:000000000000000000000000',
+    apiKey: 'AIzaSyAi2CkgtzudVULiepTTeHu0_S2FgCFy9_I',
+    appId: '1:392047337628:ios:6b4b31d5c3ddc541b70d59',
     messagingSenderId: '392047337628',
     projectId: 'fap-auto-80a6c',
     storageBucket: 'fap-auto-80a6c.firebasestorage.app',
     iosBundleId: 'com.fapauto.app',
   );
+
+  // Update these values if you add iOS to Firebase console
 }

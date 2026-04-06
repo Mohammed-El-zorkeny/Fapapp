@@ -9,7 +9,7 @@
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>com.fapauto.parts</string>
+	<string>com.fapauto.app</string>
 	<key>PROJECT_ID</key>
 	<string>fap-auto-80a6c</string>
 	<key>STORAGE_BUCKET</key>
@@ -25,6 +25,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:392047337628:ios:c19a0ca73051743eb70d59</string>
+	<string>1:392047337628:ios:6b4b31d5c3ddc541b70d59</string>
 </dict>
 </plist>
