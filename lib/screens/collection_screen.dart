@@ -863,7 +863,7 @@ class _CollectionScreenState extends State<CollectionScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  '${payment['amount'].toStringAsFixed(2)} جنيه',
+                                  '${formatMoney(payment['amount'])} جنيه',
                                   style: GoogleFonts.cairo(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 15,
@@ -908,7 +908,7 @@ class _CollectionScreenState extends State<CollectionScreen> {
                         ),
                       ),
                       Text(
-                        '${_getTotalAmount().toStringAsFixed(2)} جنيه',
+                        '${formatMoney(_getTotalAmount())} جنيه',
                         style: GoogleFonts.cairo(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,

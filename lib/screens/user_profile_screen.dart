@@ -7,6 +7,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../utils/app_colors.dart';
+import '../utils/font_size_provider.dart';
 import '../services/storage_service.dart';
 import '../services/api_service.dart';
 import 'login_screen.dart';
@@ -126,6 +127,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       _buildProfileHeader(),
                       const SizedBox(height: 24),
                       _buildContactSection(),
+                      const SizedBox(height: 16),
+                      _buildAppSettings(),
                       const SizedBox(height: 16),
                       _buildLocationSection(),
                       const SizedBox(height: 24),
@@ -291,12 +294,132 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           Divider(height: 28, color: Colors.grey.shade100),
           _buildInfoRow(Icons.home_outlined, 'العنوان بالكامل', _fullAddress.isNotEmpty ? _fullAddress : 'غير محدد'),
           Divider(height: 28, color: Colors.grey.shade100),
-          _buildInfoRow(Icons.account_balance_wallet_outlined, 'الرصيد', _balance.toStringAsFixed(2)),
+          _buildInfoRow(Icons.account_balance_wallet_outlined, 'الرصيد', formatMoney(_balance)),
           Divider(height: 28, color: Colors.grey.shade100),
           _buildInfoRow(Icons.star_outline, 'التقييم', _evaluation.isNotEmpty ? _evaluation : 'غير محدد'),
         ],
       ),
     ).animate().fadeIn(delay: 500.ms).slideY(begin: 0.05, end: 0);
+  }
+
+  Widget _buildAppSettings() {
+    return AnimatedBuilder(
+      animation: FontSizeProvider.instance,
+      builder: (context, _) {
+        final currentScale = FontSizeProvider.instance.scale;
+        return Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 5))],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(colors: [Color(0xFF6C5CE7), Color(0xFFA29BFE)]),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.settings_outlined, color: Colors.white, size: 18),
+                  ),
+                  const SizedBox(width: 10),
+                  Text('إعدادات التطبيق', style: GoogleFonts.cairo(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textDark)),
+                ],
+              ),
+              const SizedBox(height: 20),
+              // Font Size Label
+              Row(
+                children: [
+                  const Icon(Icons.format_size_rounded, color: AppColors.primary, size: 18),
+                  const SizedBox(width: 8),
+                  Text('حجم الخط', style: GoogleFonts.cairo(fontWeight: FontWeight.w600, fontSize: 14, color: AppColors.textDark)),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      FontSizeProvider.presets.firstWhere((p) => p.value == currentScale, orElse: () => FontSizeProvider.presets[1]).label,
+                      style: GoogleFonts.cairo(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 11),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              // Preset buttons row
+              Row(
+                children: FontSizeProvider.presets.map((preset) {
+                  final isSelected = (currentScale - preset.value).abs() < 0.01;
+                  return Expanded(
+                    child: GestureDetector(
+                      onTap: () => FontSizeProvider.instance.setScale(preset.value),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        margin: const EdgeInsets.symmetric(horizontal: 4),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          gradient: isSelected ? AppColors.primaryGradient : null,
+                          color: isSelected ? null : const Color(0xFFF5F6FA),
+                          borderRadius: BorderRadius.circular(12),
+                          border: isSelected ? null : Border.all(color: Colors.grey.shade200),
+                          boxShadow: isSelected ? [
+                            BoxShadow(color: AppColors.primary.withOpacity(0.25), blurRadius: 8, offset: const Offset(0, 3)),
+                          ] : [],
+                        ),
+                        child: Column(
+                          children: [
+                            Text(
+                              'أ',
+                              style: GoogleFonts.cairo(
+                                fontSize: preset.value == 0.82 ? 14 : preset.value == 1.0 ? 18 : 22,
+                                fontWeight: FontWeight.bold,
+                                color: isSelected ? Colors.white : AppColors.textDark,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              preset.label,
+                              style: GoogleFonts.cairo(
+                                fontSize: 10,
+                                color: isSelected ? Colors.white70 : AppColors.textLight,
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 12),
+              // Preview text
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF9F9F9),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.grey.shade100),
+                ),
+                child: Text(
+                  'مثال: كوتشي ميشلان 205/55R16 — السعر 450 ج.م',
+                  style: GoogleFonts.cairo(fontSize: 13, color: AppColors.textMedium),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ],
+          ),
+        ).animate().fadeIn(delay: 450.ms).slideY(begin: 0.05, end: 0);
+      },
+    );
   }
 
   Widget _buildInfoRow(IconData icon, String label, String value, {bool isCopyable = false}) {

@@ -9,6 +9,7 @@ import '../widgets/custom_button.dart';
 import 'home_screen.dart';
 import 'salesman_dashboard_screen.dart';
 import 'manstock_dashboard_screen.dart';
+import 'admin_dashboard_screen.dart';
 import '../services/notification_service.dart';
 
 class OtpScreen extends StatefulWidget {
@@ -87,7 +88,9 @@ class _OtpScreenState extends State<OtpScreen> {
       if (!mounted) return;
 
       Widget nextScreen;
-      if (userType == 'SALESMAN') {
+      if (userType == 'ADMIN') {
+        nextScreen = const AdminDashboardScreen();
+      } else if (userType == 'SALESMAN') {
         nextScreen = const SalesmanDashboardScreen();
       } else if (userType == 'MANSTOCK') {
         nextScreen = const ManstockDashboardScreen();
@@ -330,29 +333,33 @@ class _OtpScreenState extends State<OtpScreen> {
                       // ── Middle Section: OTP Input ──
                       Column(
                         children: [
-                          PinCodeTextField(
-                            appContext: context,
-                            length: 6,
-                            controller: _otpController,
-                            animationType: AnimationType.fade,
-                            autoFocus: true,
-                            errorAnimationController: _errorController,
-                            pinTheme: PinTheme(
-                              shape: PinCodeFieldShape.box,
-                              borderRadius: BorderRadius.circular(14),
-                              fieldHeight: isSmallScreen ? 48 : 54,
-                              fieldWidth: isSmallScreen ? 44 : 50,
-                              activeFillColor: Colors.white,
-                              inactiveFillColor: Colors.grey.shade50,
-                              selectedFillColor: Colors.white,
-                              activeColor: AppColors.primary,
-                              inactiveColor: Colors.grey.shade200,
-                              selectedColor: AppColors.primary,
-                              borderWidth: 1.5,
+                          Directionality(
+                            textDirection: TextDirection.ltr,
+                            child: PinCodeTextField(
+                              appContext: context,
+                              length: 6,
+                              controller: _otpController,
+                              errorTextDirection: TextDirection.ltr,
+                              animationType: AnimationType.fade,
+                              autoFocus: true,
+                              errorAnimationController: _errorController,
+                              pinTheme: PinTheme(
+                                shape: PinCodeFieldShape.box,
+                                borderRadius: BorderRadius.circular(14),
+                                fieldHeight: isSmallScreen ? 48 : 54,
+                                fieldWidth: isSmallScreen ? 44 : 50,
+                                activeFillColor: Colors.white,
+                                inactiveFillColor: Colors.grey.shade50,
+                                selectedFillColor: Colors.white,
+                                activeColor: AppColors.primary,
+                                inactiveColor: Colors.grey.shade200,
+                                selectedColor: AppColors.primary,
+                                borderWidth: 1.5,
+                              ),
+                              enableActiveFill: true,
+                              keyboardType: TextInputType.number,
+                              onCompleted: (v) {},
                             ),
-                            enableActiveFill: true,
-                            keyboardType: TextInputType.number,
-                            onCompleted: (v) {},
                           ).animate().slideX(begin: 0.1, duration: 500.ms),
                         ],
                       ),

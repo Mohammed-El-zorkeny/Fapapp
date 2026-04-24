@@ -465,7 +465,7 @@ class _OrderEditScreenState extends State<OrderEditScreen>
                         return ListTile(
                           title: Text(item.nameAr),
                           subtitle: Text(
-                            'الكمية: ${item.qty} × ${item.price.toStringAsFixed(2)} = ${(item.qty * item.price).toStringAsFixed(2)} ج.م',
+                            'الكمية: ${item.qty} × ${formatMoney(item.price)} = ${formatMoney(item.qty * item.price)} ج.م',
                           ),
                           leading: CircleAvatar(
                             backgroundColor: AppColors.primary.withOpacity(0.1),
@@ -503,7 +503,7 @@ class _OrderEditScreenState extends State<OrderEditScreen>
                               ),
                             ),
                             Text(
-                              '${_orderDetails!.orderInfo.orderTotal.toStringAsFixed(2)} ج.م',
+                              '${formatMoney(_orderDetails!.orderInfo.orderTotal)} ج.م',
                               style: const TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
@@ -608,7 +608,7 @@ class _OrderEditScreenState extends State<OrderEditScreen>
               ),
               const SizedBox(height: 5),
               Text(
-                '${info.orderTotal.toStringAsFixed(2)} ج.م',
+                '${formatMoney(info.orderTotal)} ج.م',
                 style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
@@ -782,7 +782,7 @@ class _OrderEditScreenState extends State<OrderEditScreen>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            item.price.toStringAsFixed(2),
+                            formatMoney(item.price),
                             style: const TextStyle(
                               color: AppColors.textDark,
                               fontWeight: FontWeight.w600,
@@ -986,7 +986,7 @@ class _OrderEditScreenState extends State<OrderEditScreen>
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'السعر: ${item.price.toStringAsFixed(2)} ج.م',
+                  'السعر: ${formatMoney(item.price)} ج.م',
                   style: const TextStyle(color: Colors.grey),
                 ),
                 const SizedBox(height: 16),
@@ -1038,7 +1038,7 @@ class _OrderEditScreenState extends State<OrderEditScreen>
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'الإجمالي: ${(qty * item.price).toStringAsFixed(2)} ج.م',
+                  'الإجمالي: ${formatMoney(qty * item.price)} ج.م',
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
               ],
@@ -1084,7 +1084,7 @@ class _OrderEditScreenState extends State<OrderEditScreen>
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'السعر: ${item.price.toStringAsFixed(2)} ج.م',
+                  'السعر: ${formatMoney(item.price)} ج.م',
                   style: const TextStyle(color: Colors.grey),
                 ),
                 const SizedBox(height: 16),
@@ -1144,7 +1144,7 @@ class _OrderEditScreenState extends State<OrderEditScreen>
                   ),
                 const SizedBox(height: 8),
                 Text(
-                  'الإجمالي: ${(qty * item.price).toStringAsFixed(2)} ج.م',
+                  'الإجمالي: ${formatMoney(qty * item.price)} ج.م',
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
               ],

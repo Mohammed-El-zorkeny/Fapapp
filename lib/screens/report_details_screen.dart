@@ -1,19 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../models/price_list_model.dart';
 import '../services/api_service.dart';
 import '../utils/app_colors.dart';
+import '../utils/cart_provider.dart';
 import '../utils/screenshot_protection_mixin.dart';
+import 'cart_screen.dart';
 import 'orders_screen.dart';
 
 class ReportDetailsScreen extends StatefulWidget {
   final int priceListId;
   final String priceListName;
+  final int? preselectedGroupId;
 
   const ReportDetailsScreen({
     super.key,
     required this.priceListId,
     required this.priceListName,
+    this.preselectedGroupId,
   });
 
   @override
@@ -37,25 +43,35 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen>
   Set<int> _selectedGroupIds = {};
   bool _isLoadingGroups = false;
 
-  // Cart State (Persists selections across group filters)
-  final Map<int, int> _cart = {}; // itemId -> quantity
-  final Map<int, PriceListItemModel> _cartItemsData = {}; // itemId -> model
+  // Cart State — delegated to global CartProvider
+  CartProvider get _cartProvider => CartProvider.instance;
+
+  // Local helpers for compatibility with existing item card logic
+  Map<int, int> get _cartQtys => _cartProvider.getQuantitiesForList(widget.priceListId);
 
   double get _totalAmount {
     double total = 0;
-    _cart.forEach((itemId, qty) {
-      final item = _cartItemsData[itemId];
-      if (item != null) {
-        total += item.price * qty;
-      }
+    _cartQtys.forEach((itemId, qty) {
+      final item = _cartProvider.getQuantitiesForList(widget.priceListId);
+      // use item model from live _items list
+      final model = _items.cast<PriceListItemModel?>().firstWhere(
+        (i) => i?.id == itemId, orElse: () => null);
+      if (model != null) total += model.price * qty;
     });
     return total;
   }
+
+  // Convenience getter for number of items in cart for this price list
+  int get _cartItemCount => _cartQtys.length;
 
   @override
   void initState() {
     super.initState();
     initScreenshotProtection();
+    // Apply pre-selected group from home brand slider
+    if (widget.preselectedGroupId != null) {
+      _selectedGroupIds = {widget.preselectedGroupId!};
+    }
     _fetchGroups();
     _fetchItems();
     _searchController.addListener(_applyFilters);
@@ -71,6 +87,12 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen>
           _groups = List<Map<String, dynamic>>.from(result['data']);
         }
       });
+      // Auto-open filter sheet only if no group was pre-selected from outside
+      if (_groups.isNotEmpty && widget.preselectedGroupId == null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _showGroupFilterSheet();
+        });
+      }
     }
   }
 
@@ -136,11 +158,11 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen>
           .map((json) => PriceListItemModel.fromJson(json))
           .toList();
 
-      // Sync with cart
+      // Sync with global cart
+      final savedQtys = _cartProvider.getQuantitiesForList(widget.priceListId);
       for (var item in items) {
-        if (_cart.containsKey(item.id)) {
-          item.quantity = _cart[item.id]!;
-          _cartItemsData[item.id] = item; // Update/Store metadata
+        if (savedQtys.containsKey(item.id)) {
+          item.quantity = savedQtys[item.id]!;
         }
       }
 
@@ -165,24 +187,21 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen>
   }
 
   void _updateQuantity(PriceListItemModel item, int newQty) {
-    if (newQty < item.minQty && newQty != 0) {
-      return;
-    }
-    setState(() {
-      item.quantity = newQty;
-      if (newQty <= 0) {
-        _cart.remove(item.id);
-        _cartItemsData.remove(item.id);
-      } else {
-        _cart[item.id] = newQty;
-        _cartItemsData[item.id] = item;
-      }
-    });
+    if (newQty < item.minQty && newQty != 0) return;
+    setState(() => item.quantity = newQty);
+    _cartProvider.addOrUpdate(widget.priceListId, widget.priceListName, item);
     _applyFilters();
   }
 
   @override
   Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _cartProvider,
+      builder: (context, _) => _buildScaffold(),
+    );
+  }
+
+  Widget _buildScaffold() {
     return Scaffold(
       backgroundColor: const Color(0xFFF9F9F9),
       appBar: AppBar(
@@ -192,13 +211,45 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen>
         leading: const SizedBox.shrink(),
         title: Text(
           widget.priceListName,
-          style: const TextStyle(
+          style: GoogleFonts.cairo(
             color: AppColors.textDark,
             fontWeight: FontWeight.bold,
             fontSize: 18,
           ),
         ),
         actions: [
+          // Cart icon with global badge
+          GestureDetector(
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CartScreen())),
+            child: Container(
+              margin: const EdgeInsets.only(left: 4),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  _buildHeaderIcon(
+                    Icons.shopping_cart_rounded,
+                    color: _cartProvider.totalItemCount > 0 ? AppColors.primary : AppColors.textDark,
+                  ),
+                  if (_cartProvider.totalItemCount > 0)
+                    Positioned(
+                      top: 2,
+                      right: 2,
+                      child: Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Text(
+                          '${_cartProvider.totalItemCount}',
+                          style: GoogleFonts.cairo(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                        ),
+                      ).animate().scale(),
+                    ),
+                ],
+              ),
+            ),
+          ),
           Padding(
             padding: const EdgeInsets.only(right: 16.0),
             child: _buildHeaderIcon(
@@ -448,7 +499,7 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    item.price.toStringAsFixed(2),
+                    formatMoney(item.price),
                     style: const TextStyle(
                       color: AppColors.textDark,
                       fontWeight: FontWeight.w600,
@@ -564,7 +615,7 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen>
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'السعر الحالي: ${item.price.toStringAsFixed(2)} ج.م',
+                  'السعر الحالي: ${formatMoney(item.price)} ج.م',
                   style: const TextStyle(color: Colors.grey),
                 ),
                 const SizedBox(height: 16),
@@ -626,7 +677,7 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen>
                   ),
                 const SizedBox(height: 8),
                 Text(
-                  'الإجمالي: ${(qty * item.price).toStringAsFixed(2)} ج.م',
+                  'الإجمالي: ${formatMoney(qty * item.price)} ج.م',
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
               ],
@@ -661,122 +712,126 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen>
   }
 
   Widget _buildBottomBar() {
+    final cartQtys = _cartQtys;
+    final thisListCount = cartQtys.length;
+    final globalCount = _cartProvider.totalItemCount;
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, -5),
+            blurRadius: 12,
+            offset: const Offset(0, -4),
           ),
         ],
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
+          // This-list summary row
+          Row(
             children: [
-              const Text(
-                'عدد الأصناف',
-                style: TextStyle(color: Colors.grey, fontSize: 12),
-              ),
-              Text(
-                '${_cart.length} أصناف',
-                style: const TextStyle(
-                  color: AppColors.textDark,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              if (_cart.isNotEmpty)
-                GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _cart.clear();
-                      _cartItemsData.clear();
-                      for (var item in _items) {
-                        item.quantity = 0;
-                      }
-                    });
-                    _applyFilters();
-                  },
-                  child: const Text(
-                    'مسح الكل',
-                    style: TextStyle(
-                      color: Colors.red,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      decoration: TextDecoration.underline,
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('من هذا الكشف', style: GoogleFonts.cairo(color: Colors.grey, fontSize: 11)),
+                  Text(
+                    '$thisListCount ${thisListCount == 1 ? 'صنف' : 'أصناف'}',
+                    style: GoogleFonts.cairo(color: AppColors.textDark, fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  if (thisListCount > 0)
+                    GestureDetector(
+                      onTap: () {
+                        _cartProvider.clearGroup(widget.priceListId);
+                        setState(() {
+                          for (var item in _items) {
+                            item.quantity = 0;
+                          }
+                        });
+                        _applyFilters();
+                      },
+                      child: Text(
+                        'مسح الكل',
+                        style: GoogleFonts.cairo(color: Colors.red, fontSize: 11, fontWeight: FontWeight.bold, decoration: TextDecoration.underline),
+                      ),
                     ),
+                ],
+              ),
+              const Spacer(),
+              // Go to cart button
+              GestureDetector(
+                onTap: () {
+                  if (globalCount == 0) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('يرجى اختيار أصناف أولاً', style: GoogleFonts.cairo())),
+                    );
+                    return;
+                  }
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const CartScreen()));
+                },
+                child: Container(
+                  height: 52,
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  decoration: BoxDecoration(
+                    gradient: globalCount > 0 ? AppColors.primaryGradient : const LinearGradient(colors: [Colors.grey, Colors.grey]),
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: globalCount > 0 ? [
+                      BoxShadow(color: AppColors.primary.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 4))
+                    ] : [],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          const Icon(Icons.shopping_cart_rounded, color: Colors.white, size: 22),
+                          if (globalCount > 0)
+                            Positioned(
+                              top: -5,
+                              right: -5,
+                              child: Container(
+                                padding: const EdgeInsets.all(3),
+                                decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                                child: Text('$globalCount', style: GoogleFonts.cairo(color: AppColors.primary, fontSize: 8, fontWeight: FontWeight.bold)),
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(width: 10),
+                      Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('عرض السلة', style: GoogleFonts.cairo(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                          if (globalCount > 0)
+                            Text(
+                              '${formatMoney(_cartProvider.grandTotal)} ج.م',
+                              style: GoogleFonts.cairo(color: Colors.white70, fontSize: 10),
+                            ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
-            ],
-          ),
-          const SizedBox(width: 20),
-          Expanded(
-            child: GestureDetector(
-              onTap: () {
-                if (_cart.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('يرجى اختيار أصناف أولاً')),
-                  );
-                  return;
-                }
-                _showOrderSummaryBottomSheet();
-              },
-              child: Container(
-                height: 55,
-                decoration: BoxDecoration(
-                  color: AppColors.primary,
-                  borderRadius: BorderRadius.circular(15),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.primary.withOpacity(0.3),
-                      blurRadius: 15,
-                      offset: const Offset(0, 5),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Text(
-                        _totalAmount.toStringAsFixed(2),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    Container(width: 1, height: 25, color: Colors.white24),
-                    const Expanded(
-                      child: Center(
-                        child: Text(
-                          'إنشاء طلب جديد',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
               ),
-            ),
+            ],
           ),
         ],
       ),
     );
   }
 
+  // _showOrderSummaryBottomSheet removed — now handled centrally by CartScreen
   void _showOrderSummaryBottomSheet() {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const CartScreen()));
+  }
+
+  void _unused_showOrderSummaryBottomSheet() {
     final TextEditingController notesController = TextEditingController();
 
     showModalBottomSheet(
@@ -785,8 +840,8 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen>
       backgroundColor: Colors.transparent,
       builder: (context) => StatefulBuilder(
         builder: (context, setModalState) {
-          final items = _cart.entries.map((e) {
-            final data = _cartItemsData[e.key];
+          final items = _cartQtys.entries.map((e) {
+            final data = _items.cast<PriceListItemModel?>().firstWhere((i) => i?.id == e.key, orElse: () => null);
             return {
               'id': e.key,
               'qty': e.value,
@@ -833,7 +888,7 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen>
                           style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                         Text(
-                          'الإجمالي: ${_totalAmount.toStringAsFixed(2)} جنيه',
+                          'الإجمالي: ${formatMoney(_totalAmount)} جنيه',
                           style: const TextStyle(
                             fontWeight: FontWeight.bold,
                             color: AppColors.primary,
@@ -894,8 +949,7 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen>
                                 onPressed: () {
                                   setModalState(() {
                                     final id = item['id'] as int;
-                                    _cart.remove(id);
-                                    _cartItemsData.remove(id);
+                                    _cartProvider.removeItem(widget.priceListId, id);
 
                                     // Update main UI if item is visible
                                     final mainItem = _items
@@ -905,7 +959,7 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen>
                                       setState(() => mainItem.quantity = 0);
                                     }
                                   });
-                                  if (_cart.isEmpty) Navigator.pop(context);
+                                  if (_cartProvider.isEmpty) Navigator.pop(context);
                                 },
                               ),
                             ],
@@ -940,13 +994,14 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen>
                       height: 55,
                       child: ElevatedButton(
                         onPressed: () {
-                          final selectedItems = _cart.entries.map((e) {
+                          final selectedItems = _cartQtys.entries.map((e) {
+                            final model = _items.cast<PriceListItemModel?>().firstWhere((i) => i?.id == e.key, orElse: () => null);
                             return PriceListItemModel(
                               id: e.key,
-                              itemCode: _cartItemsData[e.key]?.itemCode ?? '',
-                              nameAr: _cartItemsData[e.key]?.nameAr ?? '',
+                              itemCode: model?.itemCode ?? '',
+                              nameAr: model?.nameAr ?? '',
                               itemSide: '',
-                              price: _cartItemsData[e.key]?.price ?? 0.0,
+                              price: model?.price ?? 0.0,
                               minQty: 0,
                               quantity: e.value,
                             );
@@ -991,7 +1046,6 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen>
     );
 
     try {
-      // Prepare items array
       List<Map<String, dynamic>> itemsArray = selectedItems
           .map((item) => {"itemId": item.id, "qty": item.quantity})
           .toList();
@@ -1233,43 +1287,104 @@ class _GroupFilterBottomSheetState extends State<_GroupFilterBottomSheet> {
             ),
             const Divider(),
 
-            // Groups List
+            // Groups — 3-column grid with white cards
             Expanded(
               child: widget.groups.isEmpty
                   ? const Center(child: Text('لا توجد مجموعات متاحة'))
-                  : ListView.builder(
+                  : GridView.builder(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 3,
+                        crossAxisSpacing: 10,
+                        mainAxisSpacing: 10,
+                        childAspectRatio: 0.82,
+                      ),
                       itemCount: widget.groups.length,
                       itemBuilder: (context, index) {
                         final group = widget.groups[index];
                         final id = group['id'] as int;
-                        final name = group['nameAr'] ?? '';
+                        final name = (group['nameAr'] ?? '').toString();
+                        final code = (group['code'] ?? group['groupCode'] ?? '').toString().toUpperCase();
                         final isSelected = _tempSelected.contains(id);
+                        final imagePath = _getGroupImagePath(code, name);
 
-                        return CheckboxListTile(
-                          value: isSelected,
-                          onChanged: (val) {
+                        return GestureDetector(
+                          onTap: () {
                             setState(() {
-                              if (val == true) {
-                                _tempSelected.add(id);
-                              } else {
+                              if (isSelected) {
                                 _tempSelected.remove(id);
+                              } else {
+                                _tempSelected.add(id);
                               }
                             });
                           },
-                          title: Text(
-                            name,
-                            style: TextStyle(
-                              fontWeight: isSelected
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
-                              color: isSelected
-                                  ? AppColors.primary
-                                  : AppColors.textDark,
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 180),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: isSelected ? AppColors.primary : Colors.grey.shade200,
+                                width: isSelected ? 2 : 1,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: isSelected
+                                      ? AppColors.primary.withOpacity(0.12)
+                                      : Colors.black.withOpacity(0.04),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ],
                             ),
-                          ),
-                          activeColor: AppColors.primary,
-                          checkboxShape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(4),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                // Brand logo
+                                Container(
+                                  width: 54,
+                                  height: 54,
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade50,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: imagePath != null
+                                      ? ClipRRect(
+                                          borderRadius: BorderRadius.circular(10),
+                                          child: Image.asset(
+                                            imagePath,
+                                            fit: BoxFit.contain,
+                                            errorBuilder: (_, __, ___) => const Icon(Icons.category_outlined, color: AppColors.primary, size: 28),
+                                          ),
+                                        )
+                                      : const Icon(Icons.category_outlined, color: AppColors.primary, size: 28),
+                                ),
+                                const SizedBox(height: 8),
+                                // Name
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                                  child: Text(
+                                    name,
+                                    textAlign: TextAlign.center,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                      color: isSelected ? AppColors.primary : AppColors.textDark,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                // Check dot
+                                AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 200),
+                                  child: isSelected
+                                      ? const Icon(Icons.check_circle_rounded, color: AppColors.primary, size: 18, key: ValueKey('on'))
+                                      : const SizedBox(height: 18, key: ValueKey('off')),
+                                ),
+                              ],
+                            ),
                           ),
                         );
                       },
@@ -1340,4 +1455,34 @@ class DottedLinePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(CustomPainter oldDelegate) => false;
+}
+
+/// Maps group code/name to an image asset path.
+/// Available files: CH.jpg, HO.png, HY.png, KA.png, MG.png, MI.jpg, MZ.png, NI.png, TO.png
+String? _getGroupImagePath(String code, String name) {
+  const Map<String, String> codeMap = {
+    'CH': 'CH.jpg',
+    'HO': 'HO.png',
+    'HY': 'HY.png',
+    'KA': 'KA.png',
+    'KI': 'KA.png',
+    'MG': 'MG.png',
+    'MI': 'MI.jpg',
+    'MZ': 'MZ.png',
+    'NI': 'NI.png',
+    'TO': 'TO.png',
+  };
+
+  // Try by exact code first
+  if (code.isNotEmpty && codeMap.containsKey(code)) {
+    return 'assets/imggroup/${codeMap[code]}';
+  }
+
+  // Try by first 2 chars of name
+  final prefix = name.length >= 2 ? name.toUpperCase().substring(0, 2) : '';
+  if (prefix.isNotEmpty && codeMap.containsKey(prefix)) {
+    return 'assets/imggroup/${codeMap[prefix]}';
+  }
+
+  return null;
 }

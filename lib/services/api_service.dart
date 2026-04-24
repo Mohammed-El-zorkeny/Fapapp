@@ -1122,4 +1122,25 @@ class ApiService {
       return {'success': false, 'message': 'خطأ في الاتصال: $e'};
     }
   }
+  // API: Get Advertisements / Notices
+  Future<Map<String, dynamic>> getAds() async {
+    final url = Uri.parse('$baseUrl/content/getAds');
+    try {
+      final headers = await _authHeaders;
+      final response = await http.get(url, headers: headers);
+      final body = utf8.decode(response.bodyBytes);
+      if (response.statusCode == 200) {
+        final data = json.decode(body);
+        if (data['status'] == 'success') {
+          return {'success': true, 'data': data['ads'] ?? data['data'] ?? []};
+        }
+        return {'success': false, 'message': data['messageAr'] ?? 'لا توجد إعلانات'};
+      } else if (response.statusCode == 401) {
+        return {'success': false, 'authError': true};
+      }
+      return {'success': false, 'message': 'خطأ في السيرفر'};
+    } catch (e) {
+      return {'success': false, 'message': 'خطأ في الاتصال'};
+    }
+  }
 }

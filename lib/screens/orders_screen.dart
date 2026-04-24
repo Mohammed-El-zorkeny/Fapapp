@@ -703,34 +703,21 @@ class _OrdersScreenState extends State<OrdersScreen>
 
   Widget _buildActionRow(String statusFilter, String statusCode, int? orderId) {
     if (statusFilter == 'NEW') {
-      return Row(
-        children: [
-          Expanded(
-            child: _actionButton(
-              label: 'تعديل',
-              icon: Icons.edit_outlined,
-              isOutlined: true,
-              onTap: () {
-                if (orderId != null) {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => OrderEditScreen(orderId: orderId),
-                    ),
-                  ).then((v) { if (v == true) _loadOrders(); });
-                }
-              },
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: _actionButton(
-              label: 'إرسال للتخطيط',
-              icon: Icons.send_rounded,
-              onTap: () => _showSendToPlanningDialog(orderId),
-            ),
-          ),
-        ],
+      return _actionButton(
+        label: 'تعديل الطلب',
+        icon: Icons.edit_outlined,
+        isOutlined: true,
+        isFullWidth: true,
+        onTap: () {
+          if (orderId != null) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => OrderEditScreen(orderId: orderId),
+              ),
+            ).then((v) { if (v == true) _loadOrders(); });
+          }
+        },
       );
     } else if (statusFilter == 'WAIT' || statusCode == 'SEND_TO_CLIENT') {
       return Row(

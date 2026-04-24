@@ -385,7 +385,7 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
               ),
               const SizedBox(height: 5),
               Text(
-                '${info.orderTotal.toStringAsFixed(2)} ج.م',
+                '${formatMoney(info.orderTotal)} ج.م',
                 style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
