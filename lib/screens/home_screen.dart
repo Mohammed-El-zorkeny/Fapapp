@@ -14,6 +14,15 @@ import 'package:intl/intl.dart' as intl;
 import 'order_view_screen.dart';
 import 'report_details_screen.dart';
 import 'ad_details_screen.dart';
+import '../utils/user_session.dart';
+
+class _QuickAction {
+  final String title;
+  final IconData icon;
+  final Color color;
+  final Color lightColor;
+  _QuickAction(this.title, this.icon, this.color, this.lightColor);
+}
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -30,28 +39,37 @@ class _HomeScreenState extends State<HomeScreen> {
   List<dynamic> _recentNotifications = [];
   bool _notificationsLoading = true;
 
-  // Brand groups for slider
-  List<Map<String, dynamic>> _brandGroups = [];
-  bool _brandsLoading = true;
+
 
   // Advertisements
   List<Map<String, dynamic>> _ads = [];
   bool _adsLoading = true;
+  List<Map<String, dynamic>> _cardAds = [];
+  bool _cardAdsLoading = true;
 
-  final List<_QuickAction> _quickActions = [
-    _QuickAction('الكشوفات', Icons.description_outlined, const Color(0xFF6C5CE7), const Color(0xFFA29BFE)),
-    _QuickAction('الطلبات', Icons.shopping_bag_outlined, const Color(0xFF0984E3), const Color(0xFF74B9FF)),
-    _QuickAction('كشف الحساب', Icons.account_balance_outlined, const Color(0xFFE17055), const Color(0xFFFAB1A0)),
-    _QuickAction('الفواتير', Icons.receipt_long_outlined, const Color(0xFF00B894), const Color(0xFF55EFC4)),
-  ];
+  late List<_QuickAction> _quickActions;
 
   @override
   void initState() {
     super.initState();
+    _initQuickActions();
     _loadUserData();
     _loadRecentNotifications();
-    _loadBrandGroups();
     _loadAds();
+    _loadCardAds();
+  }
+
+  void _initQuickActions() {
+    _quickActions = [
+      _QuickAction('الكشوفات', Icons.description_outlined, const Color(0xFF6C5CE7), const Color(0xFFA29BFE)),
+      _QuickAction('الطلبات', Icons.shopping_bag_outlined, const Color(0xFF0984E3), const Color(0xFF74B9FF)),
+    ];
+    if (UserSession.instance.canViewPrices) {
+      _quickActions.addAll([
+        _QuickAction('كشف الحساب', Icons.account_balance_outlined, const Color(0xFFE17055), const Color(0xFFFAB1A0)),
+        _QuickAction('الفواتير', Icons.receipt_long_outlined, const Color(0xFF00B894), const Color(0xFF55EFC4)),
+      ]);
+    }
   }
 
   Future<void> _loadUserData() async {
@@ -81,83 +99,48 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _loadBrandGroups() async {
-    final result = await _apiService.getStockGroups();
+
+
+  Future<void> _loadAds() async {
+    final result = await _apiService.getAds(adType: 'FULL');
     if (mounted) {
       setState(() {
-        _brandsLoading = false;
+        _adsLoading = false;
         if (result['success']) {
-          _brandGroups = List<Map<String, dynamic>>.from(result['data']);
+          final all = List<Map<String, dynamic>>.from(result['data']);
+          // آخر 3 إعلانات بس
+          _ads = all.length > 3 ? all.sublist(all.length - 3) : all;
         }
       });
     }
   }
 
-  void _onBrandTapped(Map<String, dynamic> group) async {
-    final groupId = group['id'] as int;
-    final groupName = (group['nameAr'] ?? '').toString();
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ReportsScreen(preselectedGroupId: groupId, preselectedGroupName: groupName),
-      ),
-    );
-  }
-
-  Future<void> _loadAds() async {
-    final result = await _apiService.getAds();
+  Future<void> _loadCardAds() async {
+    final result = await _apiService.getAds(adType: 'CARD');
     if (mounted) {
       setState(() {
-        _adsLoading = false;
+        _cardAdsLoading = false;
         if (result['success']) {
-          _ads = List<Map<String, dynamic>>.from(result['data']);
-        } else {
-          // Fallback demo ads if API not ready
-          _ads = [
-            {
-              'id': 1,
-              'title': 'عروض رمضان خصومات حتى 50%',
-              'body': 'استفد من عروضنا الخاصة بشهر رمضان المبارك على جميع قطع غيار السيارات اليابانية والكورية.',
-              'tag': 'عرض رمضان',
-              'date': DateTime.now().toIso8601String(),
-            },
-            {
-              'id': 2,
-              'title': 'وصول منتجات جديدة في المستودع',
-              'body': 'تم إضافة أصناف جديدة من فواصل تويوتا وهيونداي وكيا هيدروليك.',
-              'tag': 'جديد',
-              'date': DateTime.now().subtract(const Duration(days: 2)).toIso8601String(),
-            },
-            {
-              'id': 3,
-              'title': 'تنبيه: التوصيل سيتأخر خلال الإجازات',
-              'body': 'نحيطكم علماً بأن التوصيل سيتأخر خلال فترة إجازات نهاية العام. نعتذر عن أي إزعاج.',
-              'tag': 'تنبيه هام',
-              'date': DateTime.now().subtract(const Duration(days: 5)).toIso8601String(),
-            },
-          ];
+          _cardAds = List<Map<String, dynamic>>.from(result['data']);
         }
       });
     }
   }
 
   void _navigateToAction(int index) {
+    if (index >= _quickActions.length) return;
+    String title = _quickActions[index].title;
     Widget screen;
-    switch (index) {
-      case 0:
-        screen = const ReportsScreen();
-        break;
-      case 1:
-        screen = const OrdersScreen();
-        break;
-      case 2:
-        screen = const StatementScreen();
-        break;
-      case 3:
-        screen = const InvoicesScreen();
-        break;
-      default:
-        return;
+    if (title == 'الكشوفات') {
+      screen = const ReportsScreen();
+    } else if (title == 'الطلبات') {
+      screen = const OrdersScreen();
+    } else if (title == 'كشف الحساب') {
+      screen = const StatementScreen();
+    } else if (title == 'الفواتير') {
+      screen = const InvoicesScreen();
+    } else {
+      return;
     }
     Navigator.push(context, MaterialPageRoute(builder: (c) => screen));
   }
@@ -288,43 +271,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
-              // Brand Slider Title
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 28, 20, 12),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'تصفح حسب الماركة',
-                        style: GoogleFonts.cairo(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textDark),
-                      ),
-                      GestureDetector(
-                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (c) => const ReportsScreen())),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                          decoration: BoxDecoration(
-                            color: AppColors.primary.withOpacity(0.08),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Row(
-                            children: [
-                              Text('كل الكشوفات', style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.primary)),
-                              const SizedBox(width: 4),
-                              const Icon(Icons.arrow_back_ios_new, size: 10, color: AppColors.primary),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ).animate().fadeIn(delay: 450.ms),
-                ),
-              ),
 
-              // Brand Slider
-              SliverToBoxAdapter(
-                child: _buildBrandSlider(),
-              ),
               // ─── Ads Section ───────────────────────────────────────
               SliverToBoxAdapter(
                 child: Padding(
@@ -362,42 +309,38 @@ class _HomeScreenState extends State<HomeScreen> {
               SliverToBoxAdapter(
                 child: _buildAdsSection(),
               ),
-              // ─── Recent Notifications ──────────────────────────────
-              // Recent Notifications Title
+              // ─── Product Cards (CARD Ads) ──────────────────────────
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(20, 28, 20, 12),
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        'آخر الإشعارات',
-                        style: GoogleFonts.cairo(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textDark),
+                      Container(
+                        padding: const EdgeInsets.all(7),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(colors: [Color(0xFF0984E3), Color(0xFF74B9FF)]),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 18),
                       ),
-                      GestureDetector(
-                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (c) => const NotificationsScreen())),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                      const SizedBox(width: 10),
+                      Text('كل ما هو جديد', style: GoogleFonts.cairo(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textDark)),
+                      const Spacer(),
+                      if (_cardAds.isNotEmpty)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                           decoration: BoxDecoration(
-                            color: AppColors.primary.withOpacity(0.08),
+                            color: const Color(0xFF0984E3).withOpacity(0.08),
                             borderRadius: BorderRadius.circular(20),
                           ),
-                          child: Row(
-                            children: [
-                              Text('عرض الكل', style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.primary)),
-                              const SizedBox(width: 4),
-                              const Icon(Icons.arrow_back_ios_new, size: 10, color: AppColors.primary),
-                            ],
-                          ),
+                          child: Text('${_cardAds.length}', style: GoogleFonts.cairo(fontSize: 12, color: const Color(0xFF0984E3), fontWeight: FontWeight.bold)),
                         ),
-                      ),
                     ],
-                  ).animate().fadeIn(delay: 600.ms),
+                  ).animate().fadeIn(delay: 800.ms),
                 ),
               ),
-              // Recent Notifications List
               SliverToBoxAdapter(
-                child: _buildRecentNotifications(),
+                child: _buildCardAdsSection(),
               ),
               const SliverToBoxAdapter(child: SizedBox(height: 20)),
             ],
@@ -496,88 +439,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildBrandSlider() {
-    if (_brandsLoading) {
-      return SizedBox(
-        height: 110,
-        child: ListView.builder(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          itemCount: 5,
-          itemBuilder: (_, __) => Container(
-            width: 80,
-            margin: const EdgeInsets.only(left: 10),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade100,
-              borderRadius: BorderRadius.circular(16),
-            ),
-          ),
-        ),
-      );
-    }
 
-    if (_brandGroups.isEmpty) return const SizedBox.shrink();
-
-    return SizedBox(
-      height: 115,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: _brandGroups.length,
-        itemBuilder: (context, index) {
-          final group = _brandGroups[index];
-          final name = (group['nameAr'] ?? '').toString();
-          final code = (group['code'] ?? group['groupCode'] ?? '').toString().toUpperCase();
-          final imagePath = _getGroupImageForHome(code, name);
-
-          return GestureDetector(
-            onTap: () => _onBrandTapped(group),
-            child: Container(
-              width: 82,
-              margin: EdgeInsets.only(left: index == _brandGroups.length - 1 ? 16 : 10),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4)),
-                ],
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 58,
-                    height: 58,
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade50,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: imagePath != null
-                        ? Image.asset(imagePath, fit: BoxFit.contain,
-                            errorBuilder: (_, __, ___) => const Icon(Icons.category_outlined, color: AppColors.primary, size: 28))
-                        : const Icon(Icons.category_outlined, color: AppColors.primary, size: 28),
-                  ),
-                  const SizedBox(height: 7),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: Text(
-                      name,
-                      textAlign: TextAlign.center,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.cairo(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.textDark),
-                    ),
-                  ),
-                ],
-              ),
-            ).animate().fadeIn(delay: (500 + index * 60).ms).slideX(begin: 0.1, end: 0),
-          );
-        },
-      ),
-    );
-  }
 
   Widget _buildAdsSection() {
     if (_adsLoading) {
@@ -620,11 +482,12 @@ class _HomeScreenState extends State<HomeScreen> {
         children: _ads.asMap().entries.map((entry) {
           final index = entry.key;
           final ad = entry.value;
-          final title = ad['title'] ?? '';
-          final body = ad['body'] ?? ad['description'] ?? '';
-          final tag = (ad['tag'] ?? '').toString();
-          final date = ad['date'] ?? ad['createdAt'] ?? '';
-          final tagColor = _adTagColor(tag);
+          final title = ad['titleAr'] ?? ad['title'] ?? '';
+          final body = (ad['descriptionAr'] ?? ad['body'] ?? ad['description'] ?? '').toString().replaceAll(RegExp(r'[#*\[\]\(\)\r\n]'), '');
+          final adType = (ad['adType'] ?? '').toString();
+          final date = ad['startDate'] ?? ad['date'] ?? ad['createdAt'] ?? '';
+          final imageUrl = (ad['imageUrl'] ?? '').toString();
+          final tagColor = _adTagColor(adType);
 
           return GestureDetector(
             onTap: () => Navigator.push(
@@ -640,7 +503,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               child: Row(
                 children: [
-                  // Color accent bar
                   Container(
                     width: 5,
                     height: 90,
@@ -650,17 +512,24 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   const SizedBox(width: 14),
-                  // Icon
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: tagColor.withOpacity(0.1),
+                  if (imageUrl.isNotEmpty)
+                    ClipRRect(
                       borderRadius: BorderRadius.circular(12),
+                      child: Image.network(imageUrl, width: 52, height: 52, fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            width: 52, height: 52,
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(color: tagColor.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                            child: Icon(Icons.campaign_rounded, color: tagColor, size: 22),
+                          )),
+                    )
+                  else
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(color: tagColor.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                      child: Icon(_adTagIcon(adType), color: tagColor, size: 22),
                     ),
-                    child: Icon(_adTagIcon(tag), color: tagColor, size: 22),
-                  ),
                   const SizedBox(width: 12),
-                  // Content
                   Expanded(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 14),
@@ -669,14 +538,11 @@ class _HomeScreenState extends State<HomeScreen> {
                         children: [
                           Row(
                             children: [
-                              if (tag.isNotEmpty)
+                              if (adType.isNotEmpty)
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: tagColor.withOpacity(0.12),
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Text(tag, style: GoogleFonts.cairo(fontSize: 9, color: tagColor, fontWeight: FontWeight.bold)),
+                                  decoration: BoxDecoration(color: tagColor.withOpacity(0.12), borderRadius: BorderRadius.circular(20)),
+                                  child: Text(_adTypeLabel(adType), style: GoogleFonts.cairo(fontSize: 9, color: tagColor, fontWeight: FontWeight.bold)),
                                 ),
                               const Spacer(),
                               if (date.isNotEmpty)
@@ -684,24 +550,15 @@ class _HomeScreenState extends State<HomeScreen> {
                             ],
                           ),
                           const SizedBox(height: 5),
-                          Text(
-                            title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.cairo(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textDark),
-                          ),
+                          Text(title, maxLines: 1, overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.cairo(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textDark)),
                           const SizedBox(height: 2),
-                          Text(
-                            body,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.cairo(fontSize: 11, color: Colors.grey.shade500),
-                          ),
+                          Text(body, maxLines: 1, overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.cairo(fontSize: 11, color: Colors.grey.shade500)),
                         ],
                       ),
                     ),
                   ),
-                  // Arrow
                   Padding(
                     padding: const EdgeInsets.only(left: 12),
                     child: Icon(Icons.arrow_back_ios_new, size: 13, color: Colors.grey.shade300),
@@ -715,22 +572,143 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Color _adTagColor(String tag) {
-    if (tag.contains('عرض') || tag.contains('خصم')) return Colors.green;
-    if (tag.contains('تنبيه') || tag.contains('هام')) return Colors.orange;
-    if (tag.contains('جديد')) return const Color(0xFF0984E3);
+  Color _adTagColor(String adType) {
+    if (adType == 'OFFER' || adType == 'DISCOUNT') return Colors.green;
+    if (adType == 'ALERT' || adType == 'WARNING') return Colors.orange;
+    if (adType == 'NEW') return const Color(0xFF0984E3);
     return AppColors.primary;
   }
 
-  IconData _adTagIcon(String tag) {
-    if (tag.contains('عرض') || tag.contains('خصم')) return Icons.local_offer_rounded;
-    if (tag.contains('تنبيه') || tag.contains('هام')) return Icons.warning_amber_rounded;
-    if (tag.contains('جديد')) return Icons.new_releases_rounded;
+  IconData _adTagIcon(String adType) {
+    if (adType == 'OFFER' || adType == 'DISCOUNT') return Icons.local_offer_rounded;
+    if (adType == 'ALERT' || adType == 'WARNING') return Icons.warning_amber_rounded;
+    if (adType == 'NEW') return Icons.new_releases_rounded;
     return Icons.campaign_rounded;
+  }
+
+  String _adTypeLabel(String adType) {
+    switch (adType) {
+      case 'CARD': return 'إعلان';
+      case 'OFFER': return 'عرض';
+      case 'DISCOUNT': return 'خصم';
+      case 'ALERT': return 'تنبيه';
+      case 'NEW': return 'جديد';
+      default: return adType;
+    }
+  }
+
+  Widget _buildCardAdsSection() {
+    if (_cardAdsLoading) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Column(
+          children: List.generate(2, (i) => Container(
+            height: 120,
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(16)),
+          ).animate(onPlay: (c) => c.repeat()).shimmer(duration: 1200.ms, color: Colors.grey.shade200)),
+        ),
+      );
+    }
+
+    if (_cardAds.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        children: _cardAds.asMap().entries.map((entry) {
+          final index = entry.key;
+          final ad = entry.value;
+          final title = ad['titleAr'] ?? ad['title'] ?? '';
+          final body = (ad['descriptionAr'] ?? '').toString().replaceAll(RegExp(r'[#*\[\]\(\)\r\n]'), '');
+          final imageUrls = (ad['imageUrl'] ?? '').toString().split(',').map((u) => u.trim()).where((u) => u.startsWith('http')).toList();
+          final firstImage = imageUrls.isNotEmpty ? imageUrls.first : '';
+
+          return GestureDetector(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => AdDetailsScreen(ad: ad)),
+            ),
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 12, offset: const Offset(0, 4))],
+              ),
+              child: Row(
+                children: [
+                  // Product Image
+                  if (firstImage.isNotEmpty)
+                    ClipRRect(
+                      borderRadius: const BorderRadius.only(topRight: Radius.circular(16), bottomRight: Radius.circular(16)),
+                      child: Image.network(firstImage, width: 100, height: 100, fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            width: 100, height: 100,
+                            color: Colors.grey.shade100,
+                            child: const Icon(Icons.image_outlined, color: Colors.grey, size: 32),
+                          )),
+                    )
+                  else
+                    Container(
+                      width: 100, height: 100,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        borderRadius: const BorderRadius.only(topRight: Radius.circular(16), bottomRight: Radius.circular(16)),
+                      ),
+                      child: const Icon(Icons.inventory_2_outlined, color: Colors.grey, size: 32),
+                    ),
+                  const SizedBox(width: 14),
+                  // Content
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (imageUrls.length > 1)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              margin: const EdgeInsets.only(bottom: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF0984E3).withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text('${imageUrls.length} صور', style: GoogleFonts.cairo(fontSize: 9, color: const Color(0xFF0984E3), fontWeight: FontWeight.bold)),
+                            ),
+                          Text(title, maxLines: 2, overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.cairo(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textDark)),
+                          const SizedBox(height: 4),
+                          Text(body, maxLines: 2, overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.cairo(fontSize: 11, color: Colors.grey.shade500, height: 1.4)),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 12),
+                    child: Icon(Icons.arrow_back_ios_new, size: 13, color: Colors.grey.shade300),
+                  ),
+                ],
+              ),
+            ).animate().fadeIn(delay: (850 + index * 80).ms).slideX(begin: 0.05, end: 0),
+          );
+        }).toList(),
+      ),
+    );
   }
 
   String _formatAdDate(String raw) {
     try {
+      // Handle dd-MM-yyyy format
+      if (raw.contains('-') && raw.length == 10) {
+        final parts = raw.split('-');
+        if (parts.length == 3 && parts[0].length == 2) {
+          return '${parts[0]}/${parts[1]}/${parts[2]}';
+        }
+      }
       final dt = DateTime.parse(raw);
       final diff = DateTime.now().difference(dt);
       if (diff.inDays == 0) return 'اليوم';
@@ -979,7 +957,11 @@ class _HomeScreenState extends State<HomeScreen> {
             } else if (index == 2) {
               Navigator.push(context, MaterialPageRoute(builder: (c) => const ReportsScreen()));
             } else if (index == 3) {
-              Navigator.push(context, MaterialPageRoute(builder: (c) => const InvoicesScreen()));
+              if (UserSession.instance.canViewPrices) {
+                Navigator.push(context, MaterialPageRoute(builder: (c) => const InvoicesScreen()));
+              } else {
+                Navigator.push(context, MaterialPageRoute(builder: (c) => const UserProfileScreen()));
+              }
             } else if (index == 4) {
               Navigator.push(context, MaterialPageRoute(builder: (c) => const UserProfileScreen()));
             }
@@ -996,8 +978,9 @@ class _HomeScreenState extends State<HomeScreen> {
             _buildNavItem(Icons.grid_view_rounded, 'الرئيسية', 0),
             _buildNavItem(Icons.shopping_bag_outlined, 'طلباتي', 1),
             _buildNavItem(Icons.description_outlined, 'الكشوفات', 2),
-            _buildNavItem(Icons.receipt_long_outlined, 'فواتيري', 3),
-            _buildNavItem(Icons.person_outline, 'حسابي', 4),
+            if (UserSession.instance.canViewPrices)
+              _buildNavItem(Icons.receipt_long_outlined, 'فواتيري', 3),
+            _buildNavItem(Icons.person_outline, 'حسابي', UserSession.instance.canViewPrices ? 4 : 3),
           ],
         ),
       ),
@@ -1017,35 +1000,4 @@ class _HomeScreenState extends State<HomeScreen> {
       label: label,
     );
   }
-}
-
-class _QuickAction {
-  final String title;
-  final IconData icon;
-  final Color color;
-  final Color lightColor;
-  const _QuickAction(this.title, this.icon, this.color, this.lightColor);
-}
-
-String? _getGroupImageForHome(String code, String name) {
-  const Map<String, String> codeMap = {
-    'CH': 'CH.jpg',
-    'HO': 'HO.png',
-    'HY': 'HY.png',
-    'KA': 'KA.png',
-    'KI': 'KA.png',
-    'MG': 'MG.png',
-    'MI': 'MI.jpg',
-    'MZ': 'MZ.png',
-    'NI': 'NI.png',
-    'TO': 'TO.png',
-  };
-  if (code.isNotEmpty && codeMap.containsKey(code)) {
-    return 'assets/imggroup/${codeMap[code]}';
-  }
-  final prefix = name.length >= 2 ? name.toUpperCase().substring(0, 2) : '';
-  if (prefix.isNotEmpty && codeMap.containsKey(prefix)) {
-    return 'assets/imggroup/${codeMap[prefix]}';
-  }
-  return null;
 }

@@ -36,6 +36,8 @@ class OrderInfo {
   final String? notes;
   final String? urlpdf;
   double orderTotal;
+  final double? totalAfter;
+  final double? totalBefore;
 
   OrderInfo({
     required this.orderId,
@@ -47,6 +49,8 @@ class OrderInfo {
     this.notes,
     this.urlpdf,
     required this.orderTotal,
+    this.totalAfter,
+    this.totalBefore,
   });
 
   factory OrderInfo.fromJson(Map<String, dynamic> json) {
@@ -60,6 +64,8 @@ class OrderInfo {
       notes: json['notes'],
       urlpdf: json['urlpdf'],
       orderTotal: _parseDouble(json['orderTotal']),
+      totalAfter: json['totalAfter'] != null ? _parseDouble(json['totalAfter']) : null,
+      totalBefore: json['totalBefore'] != null ? _parseDouble(json['totalBefore']) : null,
     );
   }
 }

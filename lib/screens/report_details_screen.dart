@@ -7,6 +7,7 @@ import '../services/api_service.dart';
 import '../utils/app_colors.dart';
 import '../utils/cart_provider.dart';
 import '../utils/screenshot_protection_mixin.dart';
+import '../utils/user_session.dart';
 import 'cart_screen.dart';
 import 'orders_screen.dart';
 
@@ -494,24 +495,25 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen>
               const SizedBox(width: 8),
 
               // Price Section
-              Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    formatMoney(item.price),
-                    style: const TextStyle(
-                      color: AppColors.textDark,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
+              if (UserSession.instance.canViewPrices)
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      formatMoney(item.price),
+                      style: const TextStyle(
+                        color: AppColors.textDark,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
                     ),
-                  ),
-                  const Text(
-                    'ج.م',
-                    style: TextStyle(fontSize: 10, color: Colors.grey),
-                  ),
-                ],
-              ),
+                    const Text(
+                      'ج.م',
+                      style: TextStyle(fontSize: 10, color: Colors.grey),
+                    ),
+                  ],
+                ),
 
               const SizedBox(width: 12),
 
@@ -614,11 +616,13 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen>
             return Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  'السعر الحالي: ${formatMoney(item.price)} ج.م',
-                  style: const TextStyle(color: Colors.grey),
-                ),
-                const SizedBox(height: 16),
+                if (UserSession.instance.canViewPrices)
+                  Text(
+                    'السعر الحالي: ${formatMoney(item.price)} ج.م',
+                    style: const TextStyle(color: Colors.grey),
+                  ),
+                if (UserSession.instance.canViewPrices)
+                  const SizedBox(height: 16),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -676,10 +680,11 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen>
                     ),
                   ),
                 const SizedBox(height: 8),
-                Text(
-                  'الإجمالي: ${formatMoney(qty * item.price)} ج.م',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
+                if (UserSession.instance.canViewPrices)
+                  Text(
+                    'الإجمالي: ${formatMoney(qty * item.price)} ج.م',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
               ],
             );
           },
@@ -808,7 +813,7 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text('عرض السلة', style: GoogleFonts.cairo(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
-                          if (globalCount > 0)
+                          if (globalCount > 0 && UserSession.instance.canViewPrices)
                             Text(
                               '${formatMoney(_cartProvider.grandTotal)} ج.م',
                               style: GoogleFonts.cairo(color: Colors.white70, fontSize: 10),

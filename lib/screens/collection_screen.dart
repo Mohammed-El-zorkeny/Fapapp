@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
@@ -6,7 +6,6 @@ import '../utils/app_colors.dart';
 import '../widgets/custom_button.dart';
 import '../services/api_service.dart';
 import 'dart:convert';
-import 'package:path/path.dart' as p;
 
 class CollectionScreen extends StatefulWidget {
   const CollectionScreen({super.key});
@@ -23,7 +22,7 @@ class _CollectionScreenState extends State<CollectionScreen> {
   Map<String, dynamic>? _selectedCustomer;
   final TextEditingController _amountController = TextEditingController();
   List<Map<String, dynamic>> _multiplePayments = [];
-  File? _proofImage;
+  XFile? _proofImage;
   final TextEditingController _notesController = TextEditingController();
   bool _isLoading = false;
 
@@ -329,7 +328,7 @@ class _CollectionScreenState extends State<CollectionScreen> {
 
       if (image != null) {
         setState(() {
-          _proofImage = File(image.path);
+          _proofImage = image;
         });
       }
     } catch (e) {
@@ -475,7 +474,7 @@ class _CollectionScreenState extends State<CollectionScreen> {
       if (_proofImage != null) {
         final bytes = await _proofImage!.readAsBytes();
         imageBase64 = base64Encode(bytes);
-        imageName = p.basename(_proofImage!.path);
+        imageName = _proofImage!.name;
       }
 
       List<String> autoNumbers = [];
@@ -932,11 +931,19 @@ class _CollectionScreenState extends State<CollectionScreen> {
         if (_proofImage != null) ...[
           ClipRRect(
             borderRadius: BorderRadius.circular(12),
-            child: Image.file(
-              _proofImage!,
-              height: 200,
-              width: double.infinity,
-              fit: BoxFit.cover,
+            child: FutureBuilder<Uint8List>(
+              future: _proofImage!.readAsBytes(),
+              builder: (context, snapshot) {
+                if (snapshot.hasData) {
+                  return Image.memory(
+                    snapshot.data!,
+                    height: 200,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                  );
+                }
+                return const SizedBox(height: 200, child: Center(child: CircularProgressIndicator()));
+              },
             ),
           ),
           const SizedBox(height: 12),

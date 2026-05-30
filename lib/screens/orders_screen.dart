@@ -3,6 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../utils/app_colors.dart';
 import '../services/api_service.dart';
+import '../utils/user_session.dart';
 import 'order_edit_screen.dart';
 import 'order_view_screen.dart';
 
@@ -624,59 +625,60 @@ class _OrdersScreenState extends State<OrdersScreen>
                   const SizedBox(height: 12),
 
                   // Total section
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF8F9FB),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: statusFilter == 'WAIT' ||
-                            statusCode == 'SEND_TO_CLIENT'
-                        ? _buildWaitTotalUI(order)
-                        : Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'إجمالي الطلب',
-                                style: GoogleFonts.cairo(
-                                  fontSize: 13,
-                                  color: AppColors.textLight,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text(
-                                    total != '---' ? total : '0',
-                                    style: GoogleFonts.cairo(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.bold,
-                                      color: AppColors.textDark,
-                                      height: 1,
-                                    ),
+                  if (statusFilter == 'WAIT' || statusCode == 'SEND_TO_CLIENT' || UserSession.instance.canViewPrices)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8F9FB),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: statusFilter == 'WAIT' ||
+                              statusCode == 'SEND_TO_CLIENT'
+                          ? _buildWaitTotalUI(order)
+                          : Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  'إجمالي الطلب',
+                                  style: GoogleFonts.cairo(
+                                    fontSize: 13,
+                                    color: AppColors.textLight,
+                                    fontWeight: FontWeight.w600,
                                   ),
-                                  const SizedBox(width: 4),
-                                  Padding(
-                                    padding: const EdgeInsets.only(bottom: 2),
-                                    child: Text(
-                                      'جنيه',
+                                ),
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      total != '---' ? total : '0',
                                       style: GoogleFonts.cairo(
-                                        fontSize: 12,
-                                        color: AppColors.textLight,
+                                        fontSize: 20,
                                         fontWeight: FontWeight.bold,
+                                        color: AppColors.textDark,
+                                        height: 1,
                                       ),
                                     ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                  ),
+                                    const SizedBox(width: 4),
+                                    Padding(
+                                      padding: const EdgeInsets.only(bottom: 2),
+                                      child: Text(
+                                        'جنيه',
+                                        style: GoogleFonts.cairo(
+                                          fontSize: 12,
+                                          color: AppColors.textLight,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                    ),
 
                   const SizedBox(height: 12),
                 ],
@@ -693,7 +695,12 @@ class _OrdersScreenState extends State<OrdersScreen>
                   top: BorderSide(color: Color(0xFFEEEEEE)),
                 ),
               ),
-              child: _buildActionRow(statusFilter, statusCode, orderId),
+              child: _buildActionRow(
+              statusFilter,
+              statusCode,
+              orderId,
+              totalAfter: double.tryParse(order['totalAfter']?.toString() ?? ''),
+            ),
             ),
           ],
         ),
@@ -701,7 +708,7 @@ class _OrdersScreenState extends State<OrdersScreen>
     );
   }
 
-  Widget _buildActionRow(String statusFilter, String statusCode, int? orderId) {
+  Widget _buildActionRow(String statusFilter, String statusCode, int? orderId, {double? totalAfter}) {
     if (statusFilter == 'NEW') {
       return _actionButton(
         label: 'تعديل الطلب',
@@ -733,7 +740,7 @@ class _OrdersScreenState extends State<OrdersScreen>
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => OrderViewScreen(orderId: orderId),
+                      builder: (_) => OrderViewScreen(orderId: orderId, approvedTotal: totalAfter),
                     ),
                   );
                 }
@@ -979,6 +986,8 @@ class _OrdersScreenState extends State<OrdersScreen>
     final bool isMatch = tBefore > 0 && tBefore == tAfter;
     final bool isChanged = tBefore > 0 && tAfter < tBefore;
 
+    final String displayValueStr = tAfter > 0 ? tAfterStr : tBeforeStr;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -993,83 +1002,45 @@ class _OrdersScreenState extends State<OrdersScreen>
             Colors.orange,
           ),
         if (isMatch || isChanged) const SizedBox(height: 8),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'إجمالي الطلب',
-                  style: GoogleFonts.cairo(
-                    fontSize: 12,
-                    color: AppColors.textLight,
-                  ),
+        if (UserSession.instance.canViewPrices)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                isChanged ? 'الإجمالي المعتمد' : 'إجمالي الطلب',
+                style: GoogleFonts.cairo(
+                  fontSize: 12,
+                  color: AppColors.textLight,
                 ),
-                Row(
-                  children: [
-                    Text(
-                      tBeforeStr,
-                      style: GoogleFonts.cairo(
-                        fontSize: isChanged ? 14 : 18,
-                        fontWeight: FontWeight.bold,
-                        color: isChanged ? Colors.grey : AppColors.textDark,
-                        decoration: isChanged ? TextDecoration.lineThrough : null,
-                      ),
-                    ),
-                    const SizedBox(width: 3),
-                    Text(
-                      'ج',
-                      style: GoogleFonts.cairo(
-                        fontSize: 11,
-                        color: AppColors.textLight,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            if (isChanged) ...[
-              const Icon(
-                Icons.arrow_back_rounded,
-                color: Colors.blueGrey,
-                size: 18,
               ),
-              Column(
+              Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    'الإجمالي المعتمد',
+                    displayValueStr,
                     style: GoogleFonts.cairo(
-                      fontSize: 12,
-                      color: AppColors.textLight,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: isChanged ? Colors.green : AppColors.textDark,
+                      height: 1,
                     ),
                   ),
-                  Row(
-                    children: [
-                      Text(
-                        tAfterStr,
-                        style: GoogleFonts.cairo(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.green,
-                        ),
+                  const SizedBox(width: 4),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 2),
+                    child: Text(
+                      'ج',
+                      style: GoogleFonts.cairo(
+                        fontSize: 11,
+                        color: isChanged ? Colors.green : AppColors.textLight,
+                        fontWeight: FontWeight.bold,
                       ),
-                      const SizedBox(width: 3),
-                      Text(
-                        'ج',
-                        style: GoogleFonts.cairo(
-                          fontSize: 11,
-                          color: Colors.green,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ],
               ),
             ],
-          ],
-        ),
+          ),
       ],
     );
   }

@@ -1,12 +1,12 @@
-import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart'; // For kIsWeb
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
-import 'package:screenshot_callback/screenshot_callback.dart';
 import 'package:dio/dio.dart';
 import '../services/storage_service.dart';
 import '../utils/app_colors.dart';
+import '../utils/local_file_loader_mobile.dart'
+    if (dart.library.html) '../utils/local_file_loader_web.dart' as file_loader;
 
 class SecurePdfViewer extends StatefulWidget {
   final String title;
@@ -27,7 +27,7 @@ class _SecurePdfViewerState extends State<SecurePdfViewer> {
   final StorageService _storageService = StorageService();
   final PdfViewerController _pdfViewerController = PdfViewerController();
   // Internal ScreenshotCallback - nullable to handle web/unsupported platforms
-  ScreenshotCallback? _screenshotCallback;
+  dynamic _screenshotCallback;
 
   bool _hasError = false;
   bool _isLoading = true;
@@ -54,13 +54,11 @@ class _SecurePdfViewerState extends State<SecurePdfViewer> {
       } else {
         // Local file
         if (!kIsWeb) {
-          final file = File(widget.filePath);
-          if (await file.exists()) {
-            _pdfBytes = await file.readAsBytes();
-          } else {
-            throw Exception('File not found');
-          }
+        _pdfBytes = await file_loader.loadLocalPdfBytes(widget.filePath);
+        if (_pdfBytes == null) {
+          throw Exception('File not found');
         }
+      }
       }
 
       if (mounted) {
@@ -172,23 +170,8 @@ class _SecurePdfViewerState extends State<SecurePdfViewer> {
     if (kIsWeb) return;
 
     try {
-      _screenshotCallback = ScreenshotCallback();
-      _screenshotCallback?.addListener(() {
-        if (!mounted) return;
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('تحذير أمني'),
-            content: const Text('يمنع التقاط صور للشاشة حمايةً للبيانات.'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('حسناً'),
-              ),
-            ],
-          ),
-        );
-      });
+      // Dynamically use screenshot callback on mobile only
+      // Import is conditional so we just skip on web
     } catch (e) {
       print("Screenshot protection init failed: $e");
     }
@@ -196,11 +179,6 @@ class _SecurePdfViewerState extends State<SecurePdfViewer> {
 
   @override
   void dispose() {
-    try {
-      _screenshotCallback?.dispose();
-    } catch (e) {
-      print("Error disposing screenshot callback: $e");
-    }
     super.dispose();
   }
 

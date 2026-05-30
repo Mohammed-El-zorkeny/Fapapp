@@ -1123,8 +1123,9 @@ class ApiService {
     }
   }
   // API: Get Advertisements / Notices
-  Future<Map<String, dynamic>> getAds() async {
-    final url = Uri.parse('$baseUrl/content/getAds');
+  Future<Map<String, dynamic>> getAds({String? adType}) async {
+    final queryParam = adType != null ? '?adType=$adType' : '';
+    final url = Uri.parse('$baseUrl/Advertisements/GetAllAdvertisements$queryParam');
     try {
       final headers = await _authHeaders;
       final response = await http.get(url, headers: headers);
@@ -1132,11 +1133,42 @@ class ApiService {
       if (response.statusCode == 200) {
         final data = json.decode(body);
         if (data['status'] == 'success') {
-          return {'success': true, 'data': data['ads'] ?? data['data'] ?? []};
+          return {'success': true, 'data': data['advertisements'] ?? []};
         }
         return {'success': false, 'message': data['messageAr'] ?? 'لا توجد إعلانات'};
       } else if (response.statusCode == 401) {
         return {'success': false, 'authError': true};
+      }
+      return {'success': false, 'message': 'خطأ في السيرفر'};
+    } catch (e) {
+      return {'success': false, 'message': 'خطأ في الاتصال'};
+    }
+  }
+
+  // API: Report screenshot/screen recording
+  Future<Map<String, dynamic>> reportScreenCapture({
+    required String captureType, // SCREENSHOT or SCREEN_RECORDING
+    required String deviceType,
+    required String deviceModel,
+    required String osVersion,
+    required String appVersion,
+    String? screenName,
+  }) async {
+    final url = Uri.parse('$baseUrl/Screenshot/CreateUserScreenshot');
+    try {
+      final headers = await _authHeaders;
+      final response = await http.post(url, headers: headers, body: json.encode({
+        'captureType': captureType,
+        'deviceType': deviceType,
+        'deviceModel': deviceModel,
+        'osVersion': osVersion,
+        'appVersion': appVersion,
+        'screenName': screenName ?? 'UNKNOWN',
+      }));
+      final body = utf8.decode(response.bodyBytes);
+      if (response.statusCode == 200) {
+        final data = json.decode(body);
+        return {'success': data['status'] == 'success', 'message': data['messageAr'] ?? ''};
       }
       return {'success': false, 'message': 'خطأ في السيرفر'};
     } catch (e) {

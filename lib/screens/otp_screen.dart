@@ -8,9 +8,11 @@ import '../services/storage_service.dart';
 import '../widgets/custom_button.dart';
 import 'home_screen.dart';
 import 'salesman_dashboard_screen.dart';
+import 'salesman_dashboard_screen.dart';
 import 'manstock_dashboard_screen.dart';
 import 'admin_dashboard_screen.dart';
 import '../services/notification_service.dart';
+import '../utils/user_session.dart';
 
 class OtpScreen extends StatefulWidget {
   final String phoneNumber;
@@ -76,7 +78,10 @@ class _OtpScreenState extends State<OtpScreen> {
         'evaluation': responseData['evaluation'],
         'balance': responseData['balance'],
         'address': responseData['address'],
+        'canViewPrices': responseData['canViewPrices'],
       });
+
+      await UserSession.instance.load();
 
       final userId = responseData['userId'] ?? responseData['id'];
       if (userId != null) {

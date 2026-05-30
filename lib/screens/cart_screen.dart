@@ -3,6 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../utils/app_colors.dart';
 import '../utils/cart_provider.dart';
+import '../utils/user_session.dart';
 import '../services/api_service.dart';
 import 'orders_screen.dart';
 
@@ -54,7 +55,7 @@ class _CartScreenState extends State<CartScreen> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const CircularProgressIndicator(color: AppColors.primary),
+              const CircularProgressIndicator(color: Color(0xFF6366F1)),
               const SizedBox(height: 16),
               Text(
                 'جاري إرسال ${groups.length} ${groups.length == 1 ? 'طلب' : 'طلبات'}...',
@@ -158,7 +159,7 @@ class _CartScreenState extends State<CartScreen> {
                   }
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
+                  backgroundColor: const Color(0xFF6366F1),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
@@ -186,8 +187,11 @@ class _CartScreenState extends State<CartScreen> {
             ? allGroups
             : allGroups.map((g) {
                 final filteredEntries = g.entries.where((e) {
-                  return e.item.nameAr.toLowerCase().contains(_searchQuery) ||
-                      e.item.itemCode.toLowerCase().contains(_searchQuery);
+                  final name = e.item.nameAr.toLowerCase();
+                  final code = e.item.itemCode.toLowerCase();
+                  final words = _searchQuery.split(RegExp(r'\s+')).where((w) => w.isNotEmpty);
+                  // كل كلمة لازم تكون موجودة في الاسم أو الكود
+                  return words.every((word) => name.contains(word) || code.contains(word));
                 }).toList();
                 if (filteredEntries.isEmpty) return null;
                 final subtotal = filteredEntries.fold(
@@ -201,7 +205,7 @@ class _CartScreenState extends State<CartScreen> {
               }).whereType<({int priceListId, String priceListName, List<CartEntry> entries, double subtotal})>().toList();
 
         return Scaffold(
-          backgroundColor: const Color(0xFFF5F6FA),
+          backgroundColor: const Color(0xFFF8F9FB),
           body: Directionality(
             textDirection: TextDirection.rtl,
             child: Column(
@@ -236,37 +240,36 @@ class _CartScreenState extends State<CartScreen> {
 
   Widget _buildAppBar(int groupCount) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 52, 20, 16),
-      decoration: const BoxDecoration(
-        gradient: AppColors.primaryGradient,
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
+      padding: const EdgeInsets.fromLTRB(20, 52, 20, 18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 2)),
+        ],
       ),
       child: Row(
         children: [
-          // Back button
           GestureDetector(
             onTap: () => Navigator.pop(context),
             child: Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(9),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(10),
+                color: const Color(0xFFF1F3F6),
+                borderRadius: BorderRadius.circular(11),
               ),
-              child: const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 16),
+              child: const Icon(Icons.arrow_forward_ios, color: Color(0xFF3A3F47), size: 16),
             ),
           ),
           const SizedBox(width: 14),
-          // Cart icon before title
           Container(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(9),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(10),
+              color: const Color(0xFFEEF2FF),
+              borderRadius: BorderRadius.circular(11),
             ),
-            child: const Icon(Icons.shopping_cart_rounded, color: Colors.white, size: 20),
+            child: const Icon(Icons.shopping_cart_rounded, color: Color(0xFF6366F1), size: 20),
           ),
           const SizedBox(width: 10),
-          // Title + subtitle
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -274,30 +277,29 @@ class _CartScreenState extends State<CartScreen> {
                 Text(
                   'سلة المشتريات',
                   style: GoogleFonts.cairo(
-                    color: Colors.white,
+                    color: const Color(0xFF1E293B),
                     fontWeight: FontWeight.bold,
-                    fontSize: 20,
+                    fontSize: 19,
                   ),
                 ),
                 if (groupCount > 0)
                   Text(
                     '$groupCount ${groupCount == 1 ? 'كشف' : 'كشوفات'} — ${_cart.totalItemCount} صنف',
-                    style: GoogleFonts.cairo(color: Colors.white70, fontSize: 12),
+                    style: GoogleFonts.cairo(color: const Color(0xFF94A3B8), fontSize: 12),
                   ),
               ],
             ),
           ),
-          // Delete all button
           if (!_cart.isEmpty)
             GestureDetector(
               onTap: () => _confirmClearAll(),
               child: Container(
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.all(9),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(10),
+                  color: const Color(0xFFFEF2F2),
+                  borderRadius: BorderRadius.circular(11),
                 ),
-                child: const Icon(Icons.delete_sweep_rounded, color: Colors.white, size: 20),
+                child: const Icon(Icons.delete_sweep_rounded, color: Color(0xFFEF4444), size: 20),
               ),
             ),
         ],
@@ -311,22 +313,21 @@ class _CartScreenState extends State<CartScreen> {
       child: Container(
         height: 46,
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: const Color(0xFFF1F3F6),
           borderRadius: BorderRadius.circular(14),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 3))],
         ),
         child: Row(
           children: [
             const SizedBox(width: 14),
-            const Icon(Icons.search_rounded, color: AppColors.primary, size: 20),
+            const Icon(Icons.search_rounded, color: Color(0xFF94A3B8), size: 20),
             const SizedBox(width: 8),
             Expanded(
               child: TextField(
                 controller: _searchController,
-                style: GoogleFonts.cairo(fontSize: 14, color: AppColors.textDark),
+                style: GoogleFonts.cairo(fontSize: 14, color: const Color(0xFF1E293B)),
                 decoration: InputDecoration(
                   hintText: 'ابحث في السلة بالاسم أو الكود...',
-                  hintStyle: GoogleFonts.cairo(color: Colors.grey.shade400, fontSize: 13),
+                  hintStyle: GoogleFonts.cairo(color: const Color(0xFFB0B8C4), fontSize: 13),
                   border: InputBorder.none,
                   contentPadding: const EdgeInsets.symmetric(vertical: 12),
                   isDense: true,
@@ -340,8 +341,8 @@ class _CartScreenState extends State<CartScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 10),
                   child: Container(
                     padding: const EdgeInsets.all(3),
-                    decoration: BoxDecoration(color: Colors.grey.shade200, shape: BoxShape.circle),
-                    child: const Icon(Icons.close, size: 14, color: Colors.grey),
+                    decoration: const BoxDecoration(color: Color(0xFFE2E8F0), shape: BoxShape.circle),
+                    child: const Icon(Icons.close, size: 14, color: Color(0xFF64748B)),
                   ),
                 ),
               )
@@ -358,15 +359,15 @@ class _CartScreenState extends State<CartScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.search_off_rounded, size: 60, color: Colors.grey.shade300),
+          const Icon(Icons.search_off_rounded, size: 60, color: Color(0xFFCBD5E1)),
           const SizedBox(height: 12),
-          Text('لا توجد نتائج', style: GoogleFonts.cairo(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textMedium)),
+          Text('لا توجد نتائج', style: GoogleFonts.cairo(fontSize: 18, fontWeight: FontWeight.bold, color: const Color(0xFF475569))),
           const SizedBox(height: 6),
-          Text('"$_searchQuery" غير موجود في السلة', style: GoogleFonts.cairo(fontSize: 13, color: AppColors.textLight)),
+          Text('"$_searchQuery" غير موجود في السلة', style: GoogleFonts.cairo(fontSize: 13, color: const Color(0xFF94A3B8))),
           const SizedBox(height: 16),
           GestureDetector(
             onTap: () => _searchController.clear(),
-            child: Text('مسح البحث', style: GoogleFonts.cairo(color: AppColors.primary, fontWeight: FontWeight.bold, decoration: TextDecoration.underline)),
+            child: Text('مسح البحث', style: GoogleFonts.cairo(color: const Color(0xFF6366F1), fontWeight: FontWeight.bold, decoration: TextDecoration.underline)),
           ),
         ],
       ).animate().fadeIn(duration: 300.ms),
@@ -377,39 +378,31 @@ class _CartScreenState extends State<CartScreen> {
     ({int priceListId, String priceListName, List<CartEntry> entries, double subtotal}) group,
     int index,
   ) {
-    final colors = [
-      [const Color(0xFF6C5CE7), const Color(0xFFA29BFE)],
-      [const Color(0xFF0984E3), const Color(0xFF74B9FF)],
-      [const Color(0xFFE17055), const Color(0xFFFAB1A0)],
-      [const Color(0xFF00B894), const Color(0xFF55EFC4)],
-    ];
-    final gradient = colors[index % colors.length];
-
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 12, offset: const Offset(0, 4))],
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE8EBF0)),
       ),
       child: Column(
         children: [
           // Group Header
           Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(colors: gradient, begin: Alignment.topRight, end: Alignment.bottomLeft),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+            padding: const EdgeInsets.all(14),
+            decoration: const BoxDecoration(
+              color: Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
             ),
             child: Row(
               children: [
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.25),
+                    color: const Color(0xFFEEF2FF),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.description_outlined, color: Colors.white, size: 18),
+                  child: const Icon(Icons.description_outlined, color: Color(0xFF6366F1), size: 18),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -418,43 +411,44 @@ class _CartScreenState extends State<CartScreen> {
                     children: [
                       Text(
                         group.priceListName,
-                        style: GoogleFonts.cairo(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                        style: GoogleFonts.cairo(color: const Color(0xFF1E293B), fontWeight: FontWeight.bold, fontSize: 14),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                       Text(
                         '${group.entries.length} ${group.entries.length == 1 ? 'صنف' : 'أصناف'}',
-                        style: GoogleFonts.cairo(color: Colors.white70, fontSize: 11),
+                        style: GoogleFonts.cairo(color: const Color(0xFF94A3B8), fontSize: 11),
                       ),
                     ],
                   ),
                 ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      formatMoney(group.subtotal),
-                      style: GoogleFonts.cairo(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-                    ),
-                    Text('جنيه', style: GoogleFonts.cairo(color: Colors.white70, fontSize: 11)),
-                  ],
-                ),
+                if (UserSession.instance.canViewPrices)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        formatMoney(group.subtotal),
+                        style: GoogleFonts.cairo(color: const Color(0xFF1E293B), fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                      Text('جنيه', style: GoogleFonts.cairo(color: const Color(0xFF94A3B8), fontSize: 11)),
+                    ],
+                  ),
                 const SizedBox(width: 10),
                 GestureDetector(
                   onTap: () => _confirmClearGroup(group.priceListId, group.priceListName),
                   child: Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
+                      color: const Color(0xFFFEF2F2),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Icon(Icons.close_rounded, color: Colors.white, size: 16),
+                    child: const Icon(Icons.close_rounded, color: Color(0xFFEF4444), size: 16),
                   ),
                 ),
               ],
             ),
           ),
-
+          const Divider(height: 1, color: Color(0xFFE8EBF0)),
           // Items
           ...group.entries.asMap().entries.map((e) => _buildItemRow(e.value, e.key == group.entries.length - 1, group.priceListId)),
         ],
@@ -464,18 +458,17 @@ class _CartScreenState extends State<CartScreen> {
 
   Widget _buildItemRow(CartEntry entry, bool isLast, int priceListId) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        border: isLast ? null : Border(bottom: BorderSide(color: Colors.grey.shade100)),
+        border: isLast ? null : const Border(bottom: BorderSide(color: Color(0xFFF1F3F6))),
       ),
       child: Row(
         children: [
-          // Qty badge
           Container(
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.08),
+              color: const Color(0xFFF1F5F9),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Column(
@@ -483,9 +476,9 @@ class _CartScreenState extends State<CartScreen> {
               children: [
                 Text(
                   '${entry.item.quantity}',
-                  style: GoogleFonts.cairo(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 16),
+                  style: GoogleFonts.cairo(color: const Color(0xFF475569), fontWeight: FontWeight.bold, fontSize: 16),
                 ),
-                Text('قطعة', style: GoogleFonts.cairo(color: AppColors.primary, fontSize: 8)),
+                Text('قطعة', style: GoogleFonts.cairo(color: const Color(0xFF94A3B8), fontSize: 8)),
               ],
             ),
           ),
@@ -496,31 +489,32 @@ class _CartScreenState extends State<CartScreen> {
               children: [
                 Text(
                   entry.item.nameAr,
-                  style: GoogleFonts.cairo(color: AppColors.textDark, fontWeight: FontWeight.w600, fontSize: 13),
+                  style: GoogleFonts.cairo(color: const Color(0xFF1E293B), fontWeight: FontWeight.w600, fontSize: 13),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
                 Text(
                   '#${entry.item.itemCode}',
-                  style: GoogleFonts.cairo(color: AppColors.textLight, fontSize: 11),
+                  style: GoogleFonts.cairo(color: const Color(0xFFB0B8C4), fontSize: 11),
                 ),
               ],
             ),
           ),
           const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                '${formatMoney(entry.item.price * entry.item.quantity)} ج.م',
-                style: GoogleFonts.cairo(color: AppColors.textDark, fontWeight: FontWeight.bold, fontSize: 13),
-              ),
-              Text(
-                '${formatMoney(entry.item.price)} × ${entry.item.quantity}',
-                style: GoogleFonts.cairo(color: AppColors.textLight, fontSize: 10),
-              ),
-            ],
-          ),
+          if (UserSession.instance.canViewPrices)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  '${formatMoney(entry.item.price * entry.item.quantity)} ج.م',
+                  style: GoogleFonts.cairo(color: const Color(0xFF1E293B), fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+                Text(
+                  '${formatMoney(entry.item.price)} × ${entry.item.quantity}',
+                  style: GoogleFonts.cairo(color: const Color(0xFFB0B8C4), fontSize: 10),
+                ),
+              ],
+            ),
           const SizedBox(width: 8),
           GestureDetector(
             onTap: () {
@@ -528,8 +522,8 @@ class _CartScreenState extends State<CartScreen> {
             },
             child: Container(
               padding: const EdgeInsets.all(5),
-              decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8)),
-              child: Icon(Icons.delete_outline_rounded, color: Colors.red.shade400, size: 16),
+              decoration: BoxDecoration(color: const Color(0xFFFEF2F2), borderRadius: BorderRadius.circular(8)),
+              child: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 16),
             ),
           ),
         ],
@@ -543,16 +537,16 @@ class _CartScreenState extends State<CartScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8, offset: const Offset(0, 3))],
+        border: Border.all(color: const Color(0xFFE8EBF0)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.edit_note_rounded, color: AppColors.primary, size: 20),
+              const Icon(Icons.edit_note_rounded, color: Color(0xFF64748B), size: 20),
               const SizedBox(width: 8),
-              Text('ملاحظات على الطلبات', style: GoogleFonts.cairo(fontWeight: FontWeight.bold, color: AppColors.textDark)),
+              Text('ملاحظات على الطلبات', style: GoogleFonts.cairo(fontWeight: FontWeight.bold, color: const Color(0xFF1E293B))),
             ],
           ),
           const SizedBox(height: 10),
@@ -562,20 +556,20 @@ class _CartScreenState extends State<CartScreen> {
             style: GoogleFonts.cairo(fontSize: 14),
             decoration: InputDecoration(
               hintText: 'أضف ملاحظاتك هنا... (اختياري)',
-              hintStyle: GoogleFonts.cairo(color: Colors.grey, fontSize: 13),
+              hintStyle: GoogleFonts.cairo(color: const Color(0xFFB0B8C4), fontSize: 13),
               filled: true,
-              fillColor: const Color(0xFFF9F9F9),
+              fillColor: const Color(0xFFF8FAFC),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade200),
+                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade200),
+                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: AppColors.primary),
+                borderSide: const BorderSide(color: Color(0xFF6366F1)),
               ),
             ),
           ),
@@ -589,32 +583,33 @@ class _CartScreenState extends State<CartScreen> {
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 30),
       decoration: BoxDecoration(
         color: Colors.white,
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 16, offset: const Offset(0, -4))],
+        border: const Border(top: BorderSide(color: Color(0xFFE8EBF0))),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8, offset: const Offset(0, -2))],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Summary Row
           Row(
             children: [
               _buildSummaryChip('الكشوفات', '$groupCount', Icons.description_outlined),
               const SizedBox(width: 8),
               _buildSummaryChip('الأصناف', '${_cart.totalItemCount}', Icons.inventory_2_outlined),
-              const SizedBox(width: 8),
-              _buildSummaryChip('الإجمالي', '${formatMoney(_cart.grandTotal)} ج', Icons.attach_money_rounded),
+              if (UserSession.instance.canViewPrices) ...[
+                const SizedBox(width: 8),
+                _buildSummaryChip('الإجمالي', '${formatMoney(_cart.grandTotal)} ج', Icons.account_balance_wallet_outlined),
+              ],
             ],
           ),
           const SizedBox(height: 14),
-          // Confirm Button
           SizedBox(
             width: double.infinity,
-            height: 56,
+            height: 54,
             child: ElevatedButton(
               onPressed: _isSendingOrders ? null : () => _confirmPlaceOrders(groupCount),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
-                disabledBackgroundColor: Colors.grey.shade300,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                disabledBackgroundColor: const Color(0xFFCBD5E1),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 elevation: 0,
               ),
               child: Row(
@@ -623,7 +618,9 @@ class _CartScreenState extends State<CartScreen> {
                   const Icon(Icons.send_rounded, color: Colors.white, size: 20),
                   const SizedBox(width: 10),
                   Text(
-                    'إرسال $groupCount ${groupCount == 1 ? 'طلب' : 'طلبات'} ← ${formatMoney(_cart.grandTotal)} ج.م',
+                    UserSession.instance.canViewPrices 
+                      ? 'إرسال $groupCount ${groupCount == 1 ? 'طلب' : 'طلبات'} ← ${formatMoney(_cart.grandTotal)} ج.م'
+                      : 'إرسال $groupCount ${groupCount == 1 ? 'طلب' : 'طلبات'}',
                     style: GoogleFonts.cairo(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
@@ -644,20 +641,20 @@ class _CartScreenState extends State<CartScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
         decoration: BoxDecoration(
-          color: AppColors.primary.withOpacity(0.05),
+          color: const Color(0xFFF8FAFC),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.primary.withOpacity(0.12)),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
         ),
         child: Row(
           children: [
-            Icon(icon, color: AppColors.primary, size: 14),
+            Icon(icon, color: const Color(0xFF64748B), size: 14),
             const SizedBox(width: 4),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(value, style: GoogleFonts.cairo(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 13)),
-                  Text(label, style: GoogleFonts.cairo(color: AppColors.textLight, fontSize: 9)),
+                  Text(value, style: GoogleFonts.cairo(color: const Color(0xFF1E293B), fontWeight: FontWeight.bold, fontSize: 13)),
+                  Text(label, style: GoogleFonts.cairo(color: const Color(0xFF94A3B8), fontSize: 9)),
                 ],
               ),
             ),
@@ -672,25 +669,32 @@ class _CartScreenState extends State<CartScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.shopping_cart_outlined, size: 80, color: Colors.grey.shade300),
-          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF1F5F9),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.shopping_cart_outlined, size: 56, color: Color(0xFF94A3B8)),
+          ),
+          const SizedBox(height: 20),
           Text(
             'السلة فارغة',
-            style: GoogleFonts.cairo(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textMedium),
+            style: GoogleFonts.cairo(fontSize: 20, fontWeight: FontWeight.bold, color: const Color(0xFF475569)),
           ),
           const SizedBox(height: 8),
           Text(
             'اختر منتجات من الكشوفات لإضافتها',
-            style: GoogleFonts.cairo(fontSize: 14, color: AppColors.textLight),
+            style: GoogleFonts.cairo(fontSize: 14, color: const Color(0xFF94A3B8)),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 24),
           GestureDetector(
             onTap: () => Navigator.pop(context),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
               decoration: BoxDecoration(
-                gradient: AppColors.primaryGradient,
+                color: const Color(0xFF6366F1),
                 borderRadius: BorderRadius.circular(14),
               ),
               child: Text(
@@ -719,18 +723,27 @@ class _CartScreenState extends State<CartScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
+              Container(width: 40, height: 4, decoration: BoxDecoration(color: const Color(0xFFE2E8F0), borderRadius: BorderRadius.circular(2))),
               const SizedBox(height: 20),
-              const Icon(Icons.send_rounded, color: AppColors.primary, size: 40),
-              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEEF2FF),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.send_rounded, color: Color(0xFF6366F1), size: 32),
+              ),
+              const SizedBox(height: 14),
               Text(
                 'تأكيد الإرسال',
-                style: GoogleFonts.cairo(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textDark),
+                style: GoogleFonts.cairo(fontSize: 18, fontWeight: FontWeight.bold, color: const Color(0xFF1E293B)),
               ),
               const SizedBox(height: 8),
               Text(
-                'سيتم إرسال $count ${count == 1 ? 'طلب' : 'طلبات'} بإجمالي ${formatMoney(_cart.grandTotal)} ج.م',
-                style: GoogleFonts.cairo(color: AppColors.textLight, fontSize: 13),
+                UserSession.instance.canViewPrices
+                  ? 'سيتم إرسال $count ${count == 1 ? 'طلب' : 'طلبات'} بإجمالي ${formatMoney(_cart.grandTotal)} ج.م'
+                  : 'سيتم إرسال $count ${count == 1 ? 'طلب' : 'طلبات'}',
+                style: GoogleFonts.cairo(color: const Color(0xFF94A3B8), fontSize: 13),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),
@@ -740,11 +753,11 @@ class _CartScreenState extends State<CartScreen> {
                     child: OutlinedButton(
                       onPressed: () => Navigator.pop(ctx),
                       style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: AppColors.primary),
+                        side: const BorderSide(color: Color(0xFFE2E8F0)),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
-                      child: Text('إلغاء', style: GoogleFonts.cairo(color: AppColors.primary, fontWeight: FontWeight.bold)),
+                      child: Text('إلغاء', style: GoogleFonts.cairo(color: const Color(0xFF64748B), fontWeight: FontWeight.bold)),
                     ),
                   ),
                   const SizedBox(width: 12),

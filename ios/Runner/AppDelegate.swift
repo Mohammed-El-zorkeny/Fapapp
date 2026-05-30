@@ -10,6 +10,8 @@ import GoogleMaps
     private let secureViewTag = 9999
     private let blurViewTag = 1000
     private var secureField: UITextField?
+    private let screenshotChannelName = "com.fapauto.parts/screenshot_events"
+    private var screenshotEventSink: FlutterEventSink?
 
     override func application(
     _ application: UIApplication,
@@ -18,6 +20,15 @@ import GoogleMaps
 
         GMSServices.provideAPIKey("AIzaSyA8NdDD7cUCWx_OIvDi0A8EApwA2Bll_sg")
         GeneratedPluginRegistrant.register(with: self)
+
+        if let controller = window?.rootViewController as? FlutterViewController {
+            let screenshotChannel = FlutterEventChannel(
+                name: screenshotChannelName,
+                binaryMessenger: controller.binaryMessenger
+            )
+            screenshotChannel.setStreamHandler(self)
+        }
+
         #if !DEBUG
         addSecuredView()
         #endif
@@ -75,8 +86,8 @@ import GoogleMaps
 
     @objc func userDidTakeScreenshot() {
         DispatchQueue.main.async {
+            self.screenshotEventSink?(["source": "ios_screenshot", "type": "screenshot"])
             self.blockScreen()
-            // إظهار الشاشة السوداء لمدة 3 ثوانٍ كتنبيه رادع
             DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
                 if !UIScreen.main.isCaptured {
                     self.unblockScreen()
@@ -143,7 +154,7 @@ import GoogleMaps
     }
 
     private func addSecuredView() {
-        guard let window = self.window else { return }  // ✅ unwrap safely
+        guard let window = self.window else { return }
 
         if !window.subviews.contains(field) {
             field.translatesAutoresizingMaskIntoConstraints = false
@@ -156,5 +167,17 @@ import GoogleMaps
 
             window.layer.addSublayer(field.layer)
         }
+    }
+}
+
+extension AppDelegate: FlutterStreamHandler {
+    func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
+        screenshotEventSink = events
+        return nil
+    }
+
+    func onCancel(withArguments arguments: Any?) -> FlutterError? {
+        screenshotEventSink = nil
+        return nil
     }
 }

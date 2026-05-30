@@ -4,6 +4,8 @@ import 'package:google_fonts/google_fonts.dart';
 import '../services/api_service.dart';
 import '../utils/app_colors.dart';
 import '../models/order_details_model.dart';
+import '../utils/user_session.dart';
+import '../utils/font_size_provider.dart';
 import 'secure_pdf_viewer.dart';
 
 class DottedLinePainterLocal extends CustomPainter {
@@ -34,8 +36,9 @@ class DottedLinePainterLocal extends CustomPainter {
 
 class OrderViewScreen extends StatefulWidget {
   final int orderId;
+  final double? approvedTotal;
 
-  const OrderViewScreen({super.key, required this.orderId});
+  const OrderViewScreen({super.key, required this.orderId, this.approvedTotal});
 
   @override
   State<OrderViewScreen> createState() => _OrderViewScreenState();
@@ -384,14 +387,30 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
                 ),
               ),
               const SizedBox(height: 5),
-              Text(
-                '${formatMoney(info.orderTotal)} ج.م',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
-              ),
+              if (UserSession.instance.canViewPrices) ...[
+                if (widget.approvedTotal != null && widget.approvedTotal! > 0) ...[
+                  Text(
+                    'الإجمالي المعتمد',
+                    style: const TextStyle(color: Colors.white70, fontSize: 10),
+                  ),
+                  Text(
+                    '${formatMoney(widget.approvedTotal!)} ج.م',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                ] else
+                  Text(
+                    '${formatMoney(info.orderTotal)} ج.م',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+              ],
             ],
           ),
         ],
@@ -442,7 +461,7 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
                         style: GoogleFonts.cairo(
                           color: AppColors.textDark,
                           fontWeight: FontWeight.bold,
-                          fontSize: 13,
+                          fontSize: 13 * FontSizeProvider.instance.scale,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -527,24 +546,25 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
               ),
 
               // Price Section
-              Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Text(
-                    item.price.toStringAsFixed(0),
-                    style: GoogleFonts.cairo(
-                      color: AppColors.textDark,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
+              if (UserSession.instance.canViewPrices)
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Text(
+                      item.price.toStringAsFixed(0),
+                      style: GoogleFonts.cairo(
+                        color: AppColors.textDark,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
                     ),
-                  ),
-                  Text(
-                    'ج.م',
-                    style: GoogleFonts.cairo(fontSize: 10, color: Colors.grey),
-                  ),
-                ],
-              ),
+                    Text(
+                      'ج.م',
+                      style: GoogleFonts.cairo(fontSize: 10, color: Colors.grey),
+                    ),
+                  ],
+                ),
 
               const SizedBox(width: 8),
 
@@ -569,39 +589,16 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      if (item.qtyPlan != null && item.qtyPlan != item.qty) ...[
-                        Text(
-                          '${item.qty}',
-                          style: GoogleFonts.cairo(
-                            color: Colors.grey,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                            decoration: TextDecoration.lineThrough,
-                          ),
+                      Text(
+                        '${item.qtyPlan ?? item.qty}',
+                        style: GoogleFonts.cairo(
+                          color: (item.qtyPlan != null && item.qtyPlan != item.qty)
+                              ? Colors.orange
+                              : AppColors.textDark,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
                         ),
-                        const Icon(
-                          Icons.arrow_downward,
-                          size: 12,
-                          color: Colors.orange,
-                        ),
-                        Text(
-                          '${item.qtyPlan}',
-                          style: GoogleFonts.cairo(
-                            color: Colors.orange,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ] else ...[
-                        Text(
-                          '${item.qty}',
-                          style: GoogleFonts.cairo(
-                            color: AppColors.textDark,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ],
+                      ),
                     ],
                   ),
                 ),

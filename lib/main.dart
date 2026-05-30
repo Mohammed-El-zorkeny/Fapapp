@@ -4,25 +4,30 @@ import 'package:flutter/material.dart';
 
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'screens/login_screen.dart';
 import 'screens/splash_screen.dart';
 import 'utils/app_colors.dart';
 import 'utils/font_size_provider.dart';
 import 'services/notification_service.dart';
+import 'services/screenshot_tracking_service.dart';
+import 'services/storage_service.dart';
+import 'utils/user_session.dart';
 import 'firebase_options.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
-  print("Handling a background message: ${message.messageId}");
+  final screenName = message.data['screenName'] ?? '';
+  if (screenName == 'FORCE_LOGOUT') {
+    await StorageService().clearAll();
+  }
 }
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Initialize Firebase
-  await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   // Set up background messaging
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
@@ -33,11 +38,51 @@ void main() async {
   // Load persisted font scale
   await FontSizeProvider.instance.load();
 
+  // Initialize Screenshot Detection
+  await ScreenshotTrackingService.instance.initialize();
+
+  // Load User Session
+  await UserSession.instance.load();
+
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkSessionValidity();
+    }
+  }
+
+  Future<void> _checkSessionValidity() async {
+    final token = await StorageService().getToken();
+    if (token == null) {
+      NotificationService.navigatorKey.currentState?.pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        (route) => false,
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -47,6 +92,9 @@ class MyApp extends StatelessWidget {
         return MaterialApp(
           title: 'Fap Auto Parts',
           navigatorKey: NotificationService.navigatorKey,
+          navigatorObservers: [
+            ScreenshotTrackingService.instance.routeObserver,
+          ],
           debugShowCheckedModeBanner: false,
           builder: (context, child) {
             // Apply global font scale
