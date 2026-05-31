@@ -3,6 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../models/order_details_model.dart';
 import '../services/api_service.dart';
 import '../utils/app_colors.dart';
+import '../utils/user_session.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 
 class OrderEditScreen extends StatefulWidget {
@@ -390,18 +391,20 @@ class _OrderEditScreenState extends State<OrderEditScreen>
                 ),
                 child: Row(
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Text(
-                        _orderDetails!.orderInfo.orderTotal.toStringAsFixed(2),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
+                    if (UserSession.instance.canViewPrices) ...[
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Text(
+                          _orderDetails!.orderInfo.orderTotal.toStringAsFixed(2),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
-                    ),
-                    Container(width: 1, height: 25, color: Colors.white24),
+                      Container(width: 1, height: 25, color: Colors.white24),
+                    ],
                     const Expanded(
                       child: Center(
                         child: Text(
@@ -465,7 +468,9 @@ class _OrderEditScreenState extends State<OrderEditScreen>
                         return ListTile(
                           title: Text(item.nameAr),
                           subtitle: Text(
-                            'الكمية: ${item.qty} × ${item.price.toStringAsFixed(2)} = ${(item.qty * item.price).toStringAsFixed(2)} ج.م',
+                            UserSession.instance.canViewPrices
+                              ? 'الكمية: ${item.qty} × ${formatMoney(item.price)} = ${formatMoney(item.qty * item.price)} ج.م'
+                              : 'الكمية: ${item.qty}',
                           ),
                           leading: CircleAvatar(
                             backgroundColor: AppColors.primary.withOpacity(0.1),
@@ -492,26 +497,27 @@ class _OrderEditScreenState extends State<OrderEditScreen>
                     ),
                     child: Column(
                       children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              'الإجمالي',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
+                        if (UserSession.instance.canViewPrices)
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                'الإجمالي',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
-                            ),
-                            Text(
-                              '${_orderDetails!.orderInfo.orderTotal.toStringAsFixed(2)} ج.م',
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.primary,
+                              Text(
+                                '${formatMoney(_orderDetails!.orderInfo.orderTotal)} ج.م',
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.primary,
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
+                            ],
+                          ),
                         SizedBox(
                           width: double.infinity,
                           child: ElevatedButton(
@@ -606,15 +612,17 @@ class _OrderEditScreenState extends State<OrderEditScreen>
                   ),
                 ),
               ),
-              const SizedBox(height: 5),
-              Text(
-                '${info.orderTotal.toStringAsFixed(2)} ج.م',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
+              if (UserSession.instance.canViewPrices) ...[
+                const SizedBox(height: 5),
+                Text(
+                  '${formatMoney(info.orderTotal)} ج.م',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
         ],
@@ -777,26 +785,28 @@ class _OrderEditScreenState extends State<OrderEditScreen>
                       const SizedBox(width: 8),
 
                       // Price Section
-                      Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            item.price.toStringAsFixed(2),
-                            style: const TextStyle(
-                              color: AppColors.textDark,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
+                      if (UserSession.instance.canViewPrices)
+                        Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              formatMoney(item.price),
+                              style: const TextStyle(
+                                color: AppColors.textDark,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                              ),
                             ),
-                          ),
-                          const Text(
-                            'ج.م',
-                            style: TextStyle(fontSize: 10, color: Colors.grey),
-                          ),
-                        ],
-                      ),
+                            const Text(
+                              'ج.م',
+                              style: TextStyle(fontSize: 10, color: Colors.grey),
+                            ),
+                          ],
+                        ),
 
-                      const SizedBox(width: 12),
+                      if (UserSession.instance.canViewPrices)
+                        const SizedBox(width: 12),
 
                       // Dotted Line
                       CustomPaint(
@@ -916,26 +926,28 @@ class _OrderEditScreenState extends State<OrderEditScreen>
                 const SizedBox(width: 8),
 
                 // Price Section
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item.price.toStringAsFixed(2),
-                      style: const TextStyle(
-                        color: AppColors.textDark,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
+                if (UserSession.instance.canViewPrices)
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        formatMoney(item.price),
+                        style: const TextStyle(
+                          color: AppColors.textDark,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
                       ),
-                    ),
-                    const Text(
-                      'ج.م',
-                      style: TextStyle(fontSize: 10, color: Colors.grey),
-                    ),
-                  ],
-                ),
+                      const Text(
+                        'ج.م',
+                        style: TextStyle(fontSize: 10, color: Colors.grey),
+                      ),
+                    ],
+                  ),
 
-                const SizedBox(width: 12),
+                if (UserSession.instance.canViewPrices)
+                  const SizedBox(width: 12),
 
                 // Dotted Line
                 CustomPaint(
@@ -985,10 +997,11 @@ class _OrderEditScreenState extends State<OrderEditScreen>
             return Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  'السعر: ${item.price.toStringAsFixed(2)} ج.م',
-                  style: const TextStyle(color: Colors.grey),
-                ),
+                if (UserSession.instance.canViewPrices)
+                  Text(
+                    'السعر: ${formatMoney(item.price)} ج.م',
+                    style: const TextStyle(color: Colors.grey),
+                  ),
                 const SizedBox(height: 16),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -1036,11 +1049,13 @@ class _OrderEditScreenState extends State<OrderEditScreen>
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'الإجمالي: ${(qty * item.price).toStringAsFixed(2)} ج.م',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
+                if (UserSession.instance.canViewPrices) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'الإجمالي: ${formatMoney(qty * item.price)} ج.م',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ],
               ],
             );
           },
@@ -1083,10 +1098,11 @@ class _OrderEditScreenState extends State<OrderEditScreen>
             return Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  'السعر: ${item.price.toStringAsFixed(2)} ج.م',
-                  style: const TextStyle(color: Colors.grey),
-                ),
+                if (UserSession.instance.canViewPrices)
+                  Text(
+                    'السعر: ${formatMoney(item.price)} ج.م',
+                    style: const TextStyle(color: Colors.grey),
+                  ),
                 const SizedBox(height: 16),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -1142,11 +1158,13 @@ class _OrderEditScreenState extends State<OrderEditScreen>
                       style: const TextStyle(color: Colors.red, fontSize: 12),
                     ),
                   ),
-                const SizedBox(height: 8),
-                Text(
-                  'الإجمالي: ${(qty * item.price).toStringAsFixed(2)} ج.م',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
+                if (UserSession.instance.canViewPrices) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'الإجمالي: ${formatMoney(qty * item.price)} ج.م',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ],
               ],
             );
           },

@@ -87,7 +87,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 _buildInputLabel('رقم الهاتف'),
                 _buildTextField(
                   controller: _phoneController,
-                  hint: '01275002379',
+                  hint: 'ادخل رقم هاتفك',
                   icon: Icons.phone_android_outlined,
                   keyboardType: TextInputType.phone,
                 ),

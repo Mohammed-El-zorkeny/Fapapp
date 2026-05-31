@@ -1,15 +1,16 @@
-import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:dio/dio.dart';
+import '../utils/pdf_downloader_mobile.dart'
+    if (dart.library.html) '../utils/pdf_downloader_web.dart' as downloader;
 import '../utils/app_colors.dart';
 import '../services/api_service.dart';
 import '../services/storage_service.dart';
 import 'secure_pdf_viewer.dart';
 import 'order_tracking_screen.dart';
+import '../utils/user_session.dart';
 
 class InvoiceDetailsScreen extends StatefulWidget {
   final int invoiceId;
@@ -116,27 +117,29 @@ class _InvoiceDetailsScreenState extends State<InvoiceDetailsScreen> {
     final String url = _invoiceDetails!['urlPdf'];
     final String invoiceNumber = _invoiceDetails!['invoiceNumber']?.toString() ?? 'invoice';
 
+    // On web, open PDF in new tab instead of downloading
+    if (kIsWeb) {
+      try {
+        final uri = Uri.parse(url);
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('حدث خطأ أثناء فتح الملف: $e', style: GoogleFonts.cairo())),
+          );
+        }
+      }
+      return;
+    }
+
     setState(() => _isLoading = true);
     
     try {
-      final dio = Dio();
       final token = await StorageService().getToken();
-      
-      Directory? dir;
-      if (Platform.isAndroid) {
-        dir = Directory('/storage/emulated/0/Download');
-        if (!await dir.exists()) dir = await getExternalStorageDirectory();
-      } else {
-        dir = await getApplicationDocumentsDirectory();
-      }
-      
-      final String savePath = '${dir?.path}/Fap_Invoice_$invoiceNumber.pdf';
-      
-      await dio.download(
-        url,
-        savePath,
-        options: Options(headers: {'Authorization': 'Bearer $token'}),
-        onReceiveProgress: (received, total) {},
+      final savePath = await downloader.downloadPdfToLocal(
+        url: url,
+        invoiceNumber: invoiceNumber,
+        token: token,
       );
 
       if (mounted) {
@@ -379,13 +382,14 @@ class _InvoiceDetailsScreenState extends State<InvoiceDetailsScreen> {
                           ],
                         ),
                         const Divider(),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text('الإجمالي', style: GoogleFonts.cairo(color: Colors.grey, fontSize: 14)),
-                            Text('$total جنيه', style: GoogleFonts.cairo(fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.primary)),
-                          ],
-                        ),
+                        if (UserSession.instance.canViewPrices)
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text('الإجمالي', style: GoogleFonts.cairo(color: Colors.grey, fontSize: 14)),
+                              Text('$total جنيه', style: GoogleFonts.cairo(fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.primary)),
+                            ],
+                          ),
                       ],
                     ),
                   ),
@@ -481,7 +485,8 @@ class _InvoiceDetailsScreenState extends State<InvoiceDetailsScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text('الكمية: $qty', style: GoogleFonts.cairo(color: Colors.grey, fontSize: 12)),
-                    Text('$finalValue جنيه', style: GoogleFonts.cairo(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.primary)),
+                    if (UserSession.instance.canViewPrices)
+                      Text('$finalValue جنيه', style: GoogleFonts.cairo(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.primary)),
                   ],
                 ),
               ],

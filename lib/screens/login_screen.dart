@@ -177,7 +177,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     keyboardType: TextInputType.phone,
                                     style: const TextStyle(fontSize: 18),
                                     decoration: InputDecoration(
-                                      hintText: '01275002379',
+                                      hintText: 'ادخل رقم هاتفك',
                                       filled: true,
                                       fillColor: Colors.white,
                                       suffixIcon: const Icon(

@@ -378,7 +378,7 @@ class _StatementScreenState extends State<StatementScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                '${absBalance.toStringAsFixed(2)} ج.م',
+                '${formatMoney(absBalance)} ج.م',
                 style: GoogleFonts.cairo(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 16),

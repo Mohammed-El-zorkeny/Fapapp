@@ -41,3 +41,9 @@ class AppColors {
   static Color shadowMedium = Colors.black.withOpacity(0.1);
   static Color primaryShadow = const Color(0xFFE21C34).withOpacity(0.3);
 }
+
+/// Formats a number as money — always shows whole number, no decimals.
+/// 450.00 → "450" | 450.75 → "450" | 2243.23 → "2243"
+String formatMoney(num value) {
+  return value.truncate().toString();
+}

@@ -4,12 +4,17 @@ import 'package:google_fonts/google_fonts.dart';
 import '../models/price_list_model.dart';
 import '../services/api_service.dart';
 import '../utils/app_colors.dart';
+import '../utils/cart_provider.dart';
 import '../utils/screenshot_protection_mixin.dart';
+import 'cart_screen.dart';
 import 'report_details_screen.dart';
 import 'secure_pdf_viewer.dart';
 
 class ReportsScreen extends StatefulWidget {
-  const ReportsScreen({super.key});
+  final int? preselectedGroupId;
+  final String? preselectedGroupName;
+
+  const ReportsScreen({super.key, this.preselectedGroupId, this.preselectedGroupName});
 
   @override
   State<ReportsScreen> createState() => _ReportsScreenState();
@@ -31,6 +36,10 @@ class _ReportsScreenState extends State<ReportsScreen>
     initScreenshotProtection();
     _fetchPriceLists();
     _searchController.addListener(_onSearchChanged);
+    // Auto-open first price list if brand was pre-selected
+    if (widget.preselectedGroupId != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _tryAutoOpenFirstList());
+    }
   }
 
   @override
@@ -75,6 +84,31 @@ class _ReportsScreenState extends State<ReportsScreen>
           _errorMessage = result['message'];
           _isLoading = false;
         });
+      }
+    }
+  }
+
+  void _tryAutoOpenFirstList() async {
+    // Wait until lists are loaded, then open first list with group filter
+    int attempts = 0;
+    while (_isLoading && attempts < 20) {
+      await Future.delayed(const Duration(milliseconds: 300));
+      attempts++;
+    }
+    if (!mounted) return;
+    if (_filteredPriceLists.isNotEmpty) {
+      final first = _filteredPriceLists.first;
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ReportDetailsScreen(
+              priceListId: first.id,
+              priceListName: first.nameAr,
+              preselectedGroupId: widget.preselectedGroupId,
+            ),
+          ),
+        );
       }
     }
   }
@@ -265,51 +299,92 @@ class _ReportsScreenState extends State<ReportsScreen>
   }
 
   Widget _buildAppBar() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-      child: Row(
-        children: [
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
+    return AnimatedBuilder(
+      animation: CartProvider.instance,
+      builder: (context, _) {
+        final cartCount = CartProvider.instance.totalItemCount;
+        return Container(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+          child: Row(
+            children: [
+              GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
+                  ),
+                  child: const Icon(Icons.arrow_forward_ios, color: AppColors.textDark, size: 18),
+                ),
               ),
-              child: const Icon(Icons.arrow_forward_ios, color: AppColors.textDark, size: 18),
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Text('الكشوفات', style: GoogleFonts.cairo(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.textDark)),
-          ),
-          GestureDetector(
-            onTap: () {
-              setState(() {
-                _isSearchVisible = !_isSearchVisible;
-                if (!_isSearchVisible) {
-                  _searchController.clear();
-                }
-              });
-            },
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: _isSearchVisible ? AppColors.primary.withOpacity(0.1) : Colors.white,
-                shape: BoxShape.circle,
-                boxShadow: _isSearchVisible ? [] : [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text('الكشوفات', style: GoogleFonts.cairo(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.textDark)),
               ),
-              child: Icon(
-                _isSearchVisible ? Icons.close : Icons.search,
-                color: _isSearchVisible ? AppColors.primary : AppColors.textDark,
-                size: 20,
+              // Cart icon with badge
+              GestureDetector(
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CartScreen())),
+                child: Container(
+                  margin: const EdgeInsets.only(left: 8),
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: cartCount > 0 ? AppColors.primary : Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 8, offset: const Offset(0, 2))],
+                  ),
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Icon(Icons.shopping_cart_rounded, color: cartCount > 0 ? Colors.white : AppColors.textDark, size: 22),
+                      if (cartCount > 0)
+                        Positioned(
+                          top: -6,
+                          left: -6,
+                          child: Container(
+                            padding: const EdgeInsets.all(3),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: AppColors.primary, width: 1.5),
+                            ),
+                            child: Text(
+                              '$cartCount',
+                              style: GoogleFonts.cairo(color: AppColors.primary, fontSize: 9, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
               ),
-            ),
-          ),
-        ],
-      ).animate().fadeIn(duration: 300.ms),
+              // Search
+              GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _isSearchVisible = !_isSearchVisible;
+                    if (!_isSearchVisible) _searchController.clear();
+                  });
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: _isSearchVisible ? AppColors.primary.withOpacity(0.1) : Colors.white,
+                    shape: BoxShape.circle,
+                    boxShadow: _isSearchVisible ? [] : [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
+                  ),
+                  child: Icon(
+                    _isSearchVisible ? Icons.close : Icons.search,
+                    color: _isSearchVisible ? AppColors.primary : AppColors.textDark,
+                    size: 20,
+                  ),
+                ),
+              ),
+            ],
+          ).animate().fadeIn(duration: 300.ms),
+        );
+      },
     );
   }
 

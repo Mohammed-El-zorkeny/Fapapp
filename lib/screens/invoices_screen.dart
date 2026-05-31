@@ -3,6 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../utils/app_colors.dart';
 import '../services/api_service.dart';
+import '../utils/user_session.dart';
 import 'invoice_details_screen.dart';
 
 class InvoicesScreen extends StatefulWidget {
@@ -755,14 +756,15 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        Text(
-                          '$total جنيه',
-                          style: GoogleFonts.cairo(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.primary,
+                        if (UserSession.instance.canViewPrices)
+                          Text(
+                            '$total جنيه',
+                            style: GoogleFonts.cairo(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.primary,
+                            ),
                           ),
-                        ),
                         Text(
                           '$itemsCount صنف',
                           style: GoogleFonts.cairo(

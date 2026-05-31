@@ -56,4 +56,19 @@ class StorageService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
   }
+
+  // Screenshot abuse counter
+  static const String _screenshotCountKey = 'screenshot_count';
+
+  Future<int> getScreenshotCount() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_screenshotCountKey) ?? 0;
+  }
+
+  Future<int> incrementScreenshotCount() async {
+    final prefs = await SharedPreferences.getInstance();
+    final count = (prefs.getInt(_screenshotCountKey) ?? 0) + 1;
+    await prefs.setInt(_screenshotCountKey, count);
+    return count;
+  }
 }

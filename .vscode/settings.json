@@ -1,4 +1,5 @@
 {
-    "avdmanager.sdkPath": "d:\\Flutter SDK\\flutter",
+    "avdmanager.sdkPath": "C:\\Users\\Asus\\AppData\\Local\\Android\\sdk",
+    "avdmanager.emulatorPath": "C:\\Users\\Asus\\AppData\\Local\\Android\\sdk\\emulator\\emulator.exe",
     "java.configuration.updateBuildConfiguration": "automatic"
 }

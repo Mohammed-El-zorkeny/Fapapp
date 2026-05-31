@@ -7,6 +7,7 @@ import 'login_screen.dart';
 import 'home_screen.dart';
 import 'salesman_dashboard_screen.dart';
 import 'manstock_dashboard_screen.dart';
+import 'admin_dashboard_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -34,7 +35,9 @@ class _SplashScreenState extends State<SplashScreen> {
     Widget nextScreen;
     if (token != null && token.isNotEmpty) {
       // User is logged in, route based on type
-      if (userType == 'SALESMAN') {
+      if (userType == 'ADMIN') {
+        nextScreen = const AdminDashboardScreen();
+      } else if (userType == 'SALESMAN') {
         nextScreen = const SalesmanDashboardScreen();
       } else if (userType == 'MANSTOCK') {
         nextScreen = const ManstockDashboardScreen();
