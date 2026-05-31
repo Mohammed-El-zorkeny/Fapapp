@@ -256,6 +256,66 @@ class ApiService {
     }
   }
 
+  // API 7b: Get All Sales Invoices (without customer filter)
+  Future<Map<String, dynamic>> getAllSalesInvoices() async {
+    final url = Uri.parse('$baseUrl/salesinvoice/getinvoicebycust');
+    try {
+      final headers = await _authHeaders;
+      final response = await http.get(url, headers: headers);
+      final body = utf8.decode(response.bodyBytes);
+      if (response.statusCode == 200) {
+        try {
+          final data = json.decode(body);
+          return {'success': true, 'data': data['invoices'] ?? []};
+        } catch (e) {
+          return {'success': false, 'message': 'خطأ في معالجة البيانات'};
+        }
+      } else {
+        try {
+          final data = json.decode(body);
+          return {'success': false, 'message': data['messageAr'] ?? 'فشل في تحميل الفواتير'};
+        } catch (_) {
+          return {'success': false, 'message': 'فشل في تحميل الفواتير (${response.statusCode})'};
+        }
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'خطأ في الاتصال: $e'};
+    }
+  }
+
+  // API 7c: Get Invoice by AutoNumber (from QR scan)
+  Future<Map<String, dynamic>> getInvoiceByAutoNumber(String autoNumber) async {
+    final url = Uri.parse(
+      '$baseUrl/salesinvoice/GetInvoiceByAutoNumber?autoNumber=${Uri.encodeComponent(autoNumber)}',
+    );
+    try {
+      final headers = await _authHeaders;
+      final response = await http.get(url, headers: headers);
+      final body = utf8.decode(response.bodyBytes);
+      if (response.statusCode == 200) {
+        try {
+          final data = json.decode(body);
+          final invoices = data['invoices'] as List?;
+          if (invoices != null && invoices.isNotEmpty) {
+            return {'success': true, 'data': Map<String, dynamic>.from(invoices.first)};
+          }
+          return {'success': false, 'message': 'لم يتم العثور على الفاتورة'};
+        } catch (e) {
+          return {'success': false, 'message': 'خطأ في معالجة البيانات'};
+        }
+      } else {
+        try {
+          final data = json.decode(body);
+          return {'success': false, 'message': data['messageAr'] ?? 'فشل في جلب الفاتورة'};
+        } catch (_) {
+          return {'success': false, 'message': 'فشل في جلب الفاتورة (${response.statusCode})'};
+        }
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'خطأ في الاتصال: $e'};
+    }
+  }
+
   // API 8: Get Invoice Items for Return by ID
   Future<Map<String, dynamic>> getInvoiceItemsById(int invoiceId) async {
     final url = Uri.parse(
@@ -416,6 +476,7 @@ class ApiService {
   Future<Map<String, dynamic>> createPayment({
     required int bankId,
     required int customerId,
+    required int invoiceId,
     required double value,
     required String? notes,
     required String? imageBase64,
@@ -424,20 +485,33 @@ class ApiService {
     final url = Uri.parse('$baseUrl/Payment/CreatePayment');
     try {
       final headers = await _authHeaders;
+      final userData = await _storageService.getUserData();
+      final salesmanId =
+          int.tryParse(userData?['userId']?.toString() ?? '0') ?? 0;
+      final requestBody = {
+        'bankId': bankId,
+        'customerId': customerId,
+        'invoiceId': invoiceId,
+        'salesmanId': salesmanId,
+        'value': value,
+        if (notes != null && notes.isNotEmpty) 'notes': notes,
+        if (imageBase64 != null) 'imageBase64': imageBase64,
+        if (imageName != null) 'imageName': imageName,
+      };
+      debugPrint('===== createPayment REQUEST =====');
+      debugPrint('URL: $url');
+      debugPrint('BODY: ${json.encode(requestBody)}');
       final response = await http.post(
         url,
         headers: headers,
-        body: json.encode({
-          'bank_id': bankId,
-          'customer_id': customerId,
-          'value': value,
-          if (notes != null && notes.isNotEmpty) 'notes': notes,
-          'image_base64': imageBase64,
-          'image_name': imageName,
-        }),
+        body: json.encode(requestBody),
       );
 
-      final data = json.decode(utf8.decode(response.bodyBytes));
+      final responseBody = utf8.decode(response.bodyBytes);
+      debugPrint('===== createPayment RESPONSE =====');
+      debugPrint('STATUS: ${response.statusCode}');
+      debugPrint('BODY: $responseBody');
+      final data = json.decode(responseBody);
 
       if (response.statusCode == 200 && data['status'] == 'success') {
         return {
@@ -454,6 +528,8 @@ class ApiService {
         };
       }
     } catch (e) {
+      debugPrint('===== createPayment ERROR =====');
+      debugPrint('$e');
       return {'success': false, 'message': 'خطأ في الاتصال: $e'};
     }
   }
@@ -461,6 +537,7 @@ class ApiService {
   // API: Create Return Invoice
   Future<Map<String, dynamic>> createReturnInvoice({
     required int invoiceSalesId,
+    required int salesmanId,
     String? notes,
     required List<Map<String, dynamic>> items,
   }) async {
@@ -468,17 +545,25 @@ class ApiService {
     try {
       final headers = await _authHeaders;
       final body = {
-        'invoice_sales_id': invoiceSalesId,
+        'invoiceSalesId': invoiceSalesId,
+        'salesmanId': salesmanId,
         if (notes != null && notes.isNotEmpty) 'notes': notes,
         'items': items,
       };
+      debugPrint('===== createReturnInvoice REQUEST =====');
+      debugPrint('URL: $url');
+      debugPrint('BODY: ${json.encode(body)}');
       final response = await http.post(
         url,
         headers: headers,
         body: json.encode(body),
       );
 
-      final data = json.decode(utf8.decode(response.bodyBytes));
+      final responseBody = utf8.decode(response.bodyBytes);
+      debugPrint('===== createReturnInvoice RESPONSE =====');
+      debugPrint('STATUS: ${response.statusCode}');
+      debugPrint('BODY: $responseBody');
+      final data = json.decode(responseBody);
 
       if (response.statusCode == 200 && data['status'] == 'success') {
         return {
@@ -492,6 +577,97 @@ class ApiService {
         return {
           'success': false,
           'message': data['messageAr'] ?? data['message'] ?? 'فشل في إنشاء فاتورة المرتجع',
+        };
+      }
+    } catch (e) {
+      debugPrint('===== createReturnInvoice ERROR =====');
+      debugPrint('$e');
+      return {'success': false, 'message': 'خطأ في الاتصال: $e'};
+    }
+  }
+
+  // API: Get My Payments
+  Future<Map<String, dynamic>> getMyPayments() async {
+    final url = Uri.parse('$baseUrl/Payment/GetAllMyPayment');
+    try {
+      final headers = await _authHeaders;
+      final response = await http.get(url, headers: headers);
+      final data = json.decode(utf8.decode(response.bodyBytes));
+
+      if (response.statusCode == 200 && data['status'] == 'success') {
+        return {
+          'success': true,
+          'data': List<Map<String, dynamic>>.from(
+              (data['payments'] as List).map((e) => Map<String, dynamic>.from(e))),
+          'total': data['total'] ?? 0,
+        };
+      } else if (response.statusCode == 401) {
+        return {'success': false, 'authError': true, 'message': 'انتهت صلاحية الجلسة'};
+      } else {
+        return {
+          'success': false,
+          'message': data['messageAr'] ?? 'فشل في جلب التحصيلات',
+        };
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'خطأ في الاتصال: $e'};
+    }
+  }
+
+  // API: Get All Items for a Return Invoice (sold + returned breakdown)
+  Future<Map<String, dynamic>> getReturnInvoiceItems({
+    required int invoiceId,
+    required int returnId,
+  }) async {
+    final url = Uri.parse(
+      '$baseUrl/ReturnInvoice/GetItemsAllInvoiceById?invoiceId=$invoiceId&returnId=$returnId',
+    );
+    try {
+      final headers = await _authHeaders;
+      final response = await http.get(url, headers: headers);
+      final data = json.decode(utf8.decode(response.bodyBytes));
+
+      if (response.statusCode == 200 && data['status'] == 'success') {
+        return {
+          'success': true,
+          'data': List<Map<String, dynamic>>.from(
+              (data['items'] as List).map((e) => Map<String, dynamic>.from(e))),
+          'total': data['total'] ?? 0,
+        };
+      } else if (response.statusCode == 401) {
+        return {'success': false, 'authError': true, 'message': 'انتهت صلاحية الجلسة'};
+      } else {
+        return {
+          'success': false,
+          'message': data['messageAr'] ?? 'فشل في جلب تفاصيل المرتجع',
+        };
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'خطأ في الاتصال: $e'};
+    }
+  }
+
+  // API: Get My Return Invoices
+  Future<Map<String, dynamic>> getMyReturnInvoices() async {
+    final url = Uri.parse('$baseUrl/ReturnInvoice/GetMyInvoice');
+    try {
+      final headers = await _authHeaders;
+      final response = await http.get(url, headers: headers);
+      final data = json.decode(utf8.decode(response.bodyBytes));
+
+      if (response.statusCode == 200 && data['status'] == 'success') {
+        return {
+          'success': true,
+          'data': List<Map<String, dynamic>>.from(
+              (data['returns'] as List).map((e) => Map<String, dynamic>.from(e))),
+          'total': data['total'] ?? 0,
+        };
+      } else if (response.statusCode == 401) {
+        return {'success': false, 'authError': true, 'message': 'انتهت صلاحية الجلسة'};
+      } else {
+        return {
+          'success': false,
+          'message': data['messageAr'] ?? 'فشل في جلب المرتجعات',
         };
       }
     } catch (e) {

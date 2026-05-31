@@ -4,8 +4,8 @@ import 'package:google_fonts/google_fonts.dart';
 import '../utils/app_colors.dart';
 import '../services/storage_service.dart';
 import '../services/api_service.dart';
-import 'collection_screen.dart';
-import 'returns_screen.dart';
+import 'my_payments_screen.dart';
+import 'my_returns_screen.dart';
 import 'notifications_screen.dart';
 import 'login_screen.dart';
 import 'package:intl/intl.dart' as intl;
@@ -66,10 +66,10 @@ class _SalesmanDashboardScreenState extends State<SalesmanDashboardScreen> {
     Widget? screen;
     switch (index) {
       case 0:
-        screen = const CollectionScreen();
+        screen = const MyPaymentsScreen();
         break;
       case 1:
-        screen = const ReturnsScreen();
+        screen = const MyReturnsScreen();
         break;
       case 2:
         ScaffoldMessenger.of(context).showSnackBar(
@@ -536,9 +536,9 @@ class _SalesmanDashboardScreenState extends State<SalesmanDashboardScreen> {
           onTap: (index) {
             setState(() => _selectedNavIndex = index);
             if (index == 1) {
-              Navigator.push(context, MaterialPageRoute(builder: (c) => const CollectionScreen()));
+              Navigator.push(context, MaterialPageRoute(builder: (c) => const MyPaymentsScreen()));
             } else if (index == 2) {
-              Navigator.push(context, MaterialPageRoute(builder: (c) => const ReturnsScreen()));
+              Navigator.push(context, MaterialPageRoute(builder: (c) => const MyReturnsScreen()));
             } else if (index == 3) {
               Navigator.push(context, MaterialPageRoute(builder: (c) => const NotificationsScreen()));
             }

@@ -1,97 +1,76 @@
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import '../utils/app_colors.dart';
 import '../widgets/custom_button.dart';
 import '../services/api_service.dart';
-import 'dart:convert';
 
 class CollectionScreen extends StatefulWidget {
-  const CollectionScreen({super.key});
+  final String? initialInvoiceNumber;
+  final double? initialAmount;
+
+  const CollectionScreen({
+    super.key,
+    this.initialInvoiceNumber,
+    this.initialAmount,
+  });
 
   @override
   State<CollectionScreen> createState() => _CollectionScreenState();
 }
 
 class _CollectionScreenState extends State<CollectionScreen> {
-  final _formKey = GlobalKey<FormState>();
+  final ApiService _apiService = ApiService();
   final ImagePicker _picker = ImagePicker();
 
-  // Form fields
-  Map<String, dynamic>? _selectedCustomer;
+  // ── invoice search ───────────────────────────────────────────
+  final TextEditingController _invoiceNumberController = TextEditingController();
+  Map<String, dynamic>? _selectedInvoice;
+  bool _isFetchingInvoice = false;
+
+  // ── payment form ─────────────────────────────────────────────
   final TextEditingController _amountController = TextEditingController();
-  List<Map<String, dynamic>> _multiplePayments = [];
-  XFile? _proofImage;
   final TextEditingController _notesController = TextEditingController();
+  Map<String, dynamic>? _selectedBank;
+  List<Map<String, dynamic>> _banks = [];
+  bool _isFetchingBanks = false;
+  List<Map<String, dynamic>> _payments = [];
+  XFile? _proofImage;
   bool _isLoading = false;
 
-  // Search state
-  String _searchQuery = '';
-  final TextEditingController _searchController = TextEditingController();
-
-  final ApiService _apiService = ApiService();
-  final List<Map<String, dynamic>> _customers = [];
-  bool _isFetchingCustomers = false;
-  int _currentPage = 0;
-  static const int _pageSize = 10;
-
-  final List<Map<String, dynamic>> _banks = [];
-  bool _isFetchingBanks = false;
-  Map<String, dynamic>? _selectedBank;
-
-  List<Map<String, dynamic>> get _filteredCustomers {
-    List<Map<String, dynamic>> filtered = _customers;
-    if (_searchQuery.isNotEmpty) {
-      final query = _searchQuery.toLowerCase();
-      filtered = _customers.where((customer) {
-        final nameAr = (customer['nameAr'] ?? '').toString().toLowerCase();
-        final code = (customer['customerCode'] ?? '').toString().toLowerCase();
-        return nameAr.contains(query) || code.contains(query);
-      }).toList();
-    }
-    return filtered;
+  // ── computed ─────────────────────────────────────────────────
+  double get _netToCollect {
+    final sale = (_selectedInvoice?['finalValue'] as num?)?.toDouble() ?? 0;
+    final ret = (_selectedInvoice?['returnTotal'] as num?)?.toDouble() ?? 0;
+    return sale - ret;
   }
 
-  List<Map<String, dynamic>> get _paginatedCustomers {
-    final filtered = _filteredCustomers;
-    final start = _currentPage * _pageSize;
-    if (start >= filtered.length) return [];
-    final end = (start + _pageSize) > filtered.length
-        ? filtered.length
-        : (start + _pageSize);
-    return filtered.sublist(start, end);
-  }
+  double get _paymentsTotal =>
+      _payments.fold(0.0, (s, p) => s + (p['amount'] as double));
+  // ─────────────────────────────────────────────────────────────
 
   @override
   void initState() {
     super.initState();
-    _fetchCustomers();
     _fetchBanks();
-  }
-
-  Future<void> _fetchCustomers() async {
-    setState(() => _isFetchingCustomers = true);
-    final result = await _apiService.getCustomers();
-    if (mounted) {
-      setState(() {
-        _isFetchingCustomers = false;
-        if (result['success']) {
-          _customers.clear();
-          final List<dynamic> data = result['data'] ?? [];
-          _customers.addAll(
-            data.map((e) => Map<String, dynamic>.from(e)).toList(),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('خطأ في تحميل العملاء: ${result['message']}'),
-              backgroundColor: AppColors.error,
-            ),
-          );
-        }
+    if (widget.initialInvoiceNumber != null &&
+        widget.initialInvoiceNumber!.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _invoiceNumberController.text = widget.initialInvoiceNumber!;
+        _searchByAutoNumber(widget.initialInvoiceNumber!);
       });
     }
+  }
+
+  @override
+  void dispose() {
+    _invoiceNumberController.dispose();
+    _amountController.dispose();
+    _notesController.dispose();
+    super.dispose();
   }
 
   Future<void> _fetchBanks() async {
@@ -101,268 +80,121 @@ class _CollectionScreenState extends State<CollectionScreen> {
       setState(() {
         _isFetchingBanks = false;
         if (result['success']) {
-          _banks.clear();
-          final List<dynamic> data = result['data'] ?? [];
-          _banks.addAll(data.map((e) => Map<String, dynamic>.from(e)).toList());
+          _banks = List<Map<String, dynamic>>.from(
+              (result['data'] as List).map((e) => Map<String, dynamic>.from(e)));
         }
       });
     }
   }
 
-  @override
-  void dispose() {
-    _amountController.dispose();
-    _notesController.dispose();
-    _searchController.dispose();
-    super.dispose();
+  Future<void> _searchByAutoNumber(String autoNumber) async {
+    final trimmed = autoNumber.trim();
+    if (trimmed.isEmpty) return;
+
+    setState(() {
+      _isFetchingInvoice = true;
+      _selectedInvoice = null;
+      _payments = [];
+      _amountController.clear();
+    });
+
+    final result = await _apiService.getInvoiceByAutoNumber(trimmed);
+    if (!mounted) return;
+
+    if (result['success']) {
+      final invoice = result['data'] as Map<String, dynamic>;
+      setState(() {
+        _isFetchingInvoice = false;
+        _selectedInvoice = invoice;
+        // use initialAmount if provided, otherwise compute from invoice
+        final amount = (widget.initialAmount != null && widget.initialAmount! > 0)
+            ? widget.initialAmount!
+            : _netToCollectFromInvoice(invoice);
+        if (amount > 0) {
+          _amountController.text = amount.toStringAsFixed(2);
+        }
+      });
+    } else {
+      setState(() => _isFetchingInvoice = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(result['message'] ?? 'لم يتم العثور على الفاتورة'),
+          backgroundColor: AppColors.error,
+        ));
+      }
+    }
   }
 
-  void _showCustomerSearch() {
-    _searchQuery = '';
-    _searchController.clear();
-    _currentPage = 0;
+  double _netToCollectFromInvoice(Map<String, dynamic> inv) {
+    final sale = (inv['finalValue'] as num?)?.toDouble() ?? 0;
+    final ret = (inv['returnTotal'] as num?)?.toDouble() ?? 0;
+    return sale - ret;
+  }
 
+  void _scanQRCode() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setModalState) {
-          return Container(
-            height: MediaQuery.of(context).size.height * 0.8,
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-            ),
-            child: Directionality(
-              textDirection: TextDirection.rtl,
-              child: Column(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      border: Border(
-                        bottom: BorderSide(color: Colors.grey.shade200),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'اختر العميل',
-                          style: GoogleFonts.cairo(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        IconButton(
-                          onPressed: () => Navigator.pop(context),
-                          icon: const Icon(Icons.close),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: TextField(
-                      controller: _searchController,
-                      onChanged: (value) {
-                        setModalState(() {
-                          _searchQuery = value;
-                        });
-                      },
-                      decoration: InputDecoration(
-                        hintText: 'ابحث عن اسم أو كود العميل...',
-                        hintStyle: GoogleFonts.cairo(fontSize: 14),
-                        prefixIcon: const Icon(
-                          Icons.search,
-                          color: AppColors.primary,
-                        ),
-                        filled: true,
-                        fillColor: Colors.grey.shade100,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: _isFetchingCustomers
-                        ? const Center(child: CircularProgressIndicator())
-                        : _filteredCustomers.isEmpty
-                        ? Center(
-                            child: Text(
-                              'لا يوجد عملاء مطابقتين للبحث',
-                              style: GoogleFonts.cairo(
-                                color: AppColors.textLight,
-                              ),
-                            ),
-                          )
-                        : Column(
-                            children: [
-                              Expanded(
-                                child: ListView.separated(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                  ),
-                                  itemCount: _paginatedCustomers.length,
-                                  separatorBuilder: (context, index) =>
-                                      const Divider(),
-                                  itemBuilder: (context, index) {
-                                    final customer = _paginatedCustomers[index];
-                                    final isSelected =
-                                        _selectedCustomer?['id'] ==
-                                        customer['id'];
-                                    return ListTile(
-                                      contentPadding:
-                                          const EdgeInsets.symmetric(
-                                            horizontal: 12,
-                                            vertical: 4,
-                                          ),
-                                      leading: CircleAvatar(
-                                        backgroundColor: AppColors.primary
-                                            .withOpacity(0.1),
-                                        child: const Icon(
-                                          Icons.person,
-                                          color: AppColors.primary,
-                                        ),
-                                      ),
-                                      onTap: () {
-                                        setState(() {
-                                          _selectedCustomer = customer;
-                                        });
-                                        Navigator.pop(context);
-                                      },
-                                      title: Text(
-                                        customer['nameAr'] ?? 'بدون اسم',
-                                        style: GoogleFonts.cairo(
-                                          fontWeight: isSelected
-                                              ? FontWeight.bold
-                                              : FontWeight.normal,
-                                          color: isSelected
-                                              ? AppColors.primary
-                                              : AppColors.textDark,
-                                        ),
-                                      ),
-                                      subtitle: Text(
-                                        'كود: ${customer['customerCode'] ?? '---'}',
-                                        style: GoogleFonts.cairo(fontSize: 12),
-                                      ),
-                                      trailing: isSelected
-                                          ? const Icon(
-                                              Icons.check_circle,
-                                              color: AppColors.primary,
-                                            )
-                                          : null,
-                                    );
-                                  },
-                                ),
-                              ),
-                              if (_filteredCustomers.length > _pageSize)
-                                Padding(
-                                  padding: const EdgeInsets.all(16.0),
-                                  child: Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      TextButton.icon(
-                                        onPressed: _currentPage > 0
-                                            ? () => setModalState(
-                                                () => _currentPage--,
-                                              )
-                                            : null,
-                                        icon: const Icon(
-                                          Icons.arrow_back_ios,
-                                          size: 16,
-                                        ),
-                                        label: Text(
-                                          'السابق',
-                                          style: GoogleFonts.cairo(),
-                                        ),
-                                      ),
-                                      Text(
-                                        'صفحة ${_currentPage + 1} من ${(_filteredCustomers.length / _pageSize).ceil()}',
-                                        style: GoogleFonts.cairo(fontSize: 12),
-                                      ),
-                                      TextButton.icon(
-                                        onPressed:
-                                            (_currentPage + 1) * _pageSize <
-                                                _filteredCustomers.length
-                                            ? () => setModalState(
-                                                () => _currentPage++,
-                                              )
-                                            : null,
-                                        label: Text(
-                                          'التالي',
-                                          style: GoogleFonts.cairo(),
-                                        ),
-                                        icon: const Icon(
-                                          Icons.arrow_forward_ios,
-                                          size: 16,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                            ],
-                          ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
+      builder: (context) => SizedBox(
+        height: MediaQuery.of(context).size.height * 0.7,
+        child: MobileScanner(
+          onDetect: (capture) {
+            final code = capture.barcodes.firstOrNull?.rawValue;
+            if (code != null) {
+              Navigator.pop(context);
+              _invoiceNumberController.text = code.trim();
+              _searchByAutoNumber(code.trim());
+            }
+          },
+        ),
       ),
     );
   }
 
-  Future<void> _pickImage(ImageSource source) async {
-    try {
-      final XFile? image = await _picker.pickImage(
-        source: source,
-        maxWidth: 1920,
-        maxHeight: 1080,
-        imageQuality: 85,
-      );
-
-      if (image != null) {
-        setState(() {
-          _proofImage = image;
-        });
-      }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('فشل اختيار الصورة: $e'),
-          backgroundColor: AppColors.error,
-        ),
-      );
+  void _addPayment() {
+    final amount = double.tryParse(_amountController.text);
+    if (amount == null || amount <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('أدخل مبلغاً صحيحاً')));
+      return;
     }
+    if (_selectedBank == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('اختر البنك / طريقة التحصيل')));
+      return;
+    }
+    setState(() {
+      _payments.add({'amount': amount, 'bank': _selectedBank});
+      _amountController.clear();
+      _selectedBank = null;
+    });
   }
 
-  void _showImageSourceDialog() {
+  void _removePayment(int index) =>
+      setState(() => _payments.removeAt(index));
+
+  Future<void> _pickImage(ImageSource source) async {
+    final img = await _picker.pickImage(
+        source: source, maxWidth: 1920, maxHeight: 1080, imageQuality: 85);
+    if (img != null) setState(() => _proofImage = img);
+  }
+
+  void _showImageSourceSheet() {
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => Directionality(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => Directionality(
         textDirection: TextDirection.rtl,
         child: Padding(
           padding: const EdgeInsets.all(20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                'اختر مصدر الصورة',
-                style: GoogleFonts.cairo(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 20),
+              Text('اختر مصدر الصورة',
+                  style: GoogleFonts.cairo(
+                      fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 16),
               ListTile(
                 leading: const Icon(Icons.camera_alt, color: AppColors.primary),
                 title: Text('الكاميرا', style: GoogleFonts.cairo()),
@@ -372,10 +204,8 @@ class _CollectionScreenState extends State<CollectionScreen> {
                 },
               ),
               ListTile(
-                leading: const Icon(
-                  Icons.photo_library,
-                  color: AppColors.primary,
-                ),
+                leading:
+                    const Icon(Icons.photo_library, color: AppColors.primary),
                 title: Text('المعرض', style: GoogleFonts.cairo()),
                 onTap: () {
                   Navigator.pop(context);
@@ -389,83 +219,122 @@ class _CollectionScreenState extends State<CollectionScreen> {
     );
   }
 
-  void _addPaymentEntry() {
-    if (_amountController.text.isEmpty) {
+  void _showConfirmSheet() {
+    if (_selectedInvoice == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('الرجاء إدخال المبلغ'),
-          backgroundColor: AppColors.error,
-        ),
-      );
+          const SnackBar(content: Text('الرجاء البحث عن الفاتورة أولاً')));
       return;
     }
-
-    if (_selectedBank == null) {
+    if (_payments.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('الرجاء اختيار البنك/طريقة التحويل'),
-          backgroundColor: AppColors.error,
-        ),
-      );
+          const SnackBar(content: Text('أضف مبلغاً على الأقل للتحصيل')));
       return;
     }
-
-    setState(() {
-      _multiplePayments.add({
-        'amount': double.parse(_amountController.text),
-        'bank': _selectedBank,
-      });
-      _amountController.clear();
-      _selectedBank = null;
-    });
-  }
-
-  void _removePaymentEntry(int index) {
-    setState(() {
-      _multiplePayments.removeAt(index);
-    });
-  }
-
-  double _getTotalAmount() {
-    return _multiplePayments.fold(
-      0,
-      (sum, payment) => sum + (payment['amount'] as double),
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: Padding(
+          padding:
+              EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+          child: Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Center(
+                  child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                          color: Colors.grey.shade300,
+                          borderRadius: BorderRadius.circular(2))),
+                ),
+                const SizedBox(height: 16),
+                Text('تأكيد التحصيل',
+                    style: GoogleFonts.cairo(
+                        fontSize: 18, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 16),
+                // ── summary ──
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey.shade200),
+                  ),
+                  child: Column(
+                    children: [
+                      _confirmRow('العميل',
+                          _selectedInvoice!['customerName'] ?? '---',
+                          Colors.blue.shade700),
+                      const Divider(height: 14),
+                      _confirmRow('الفاتورة',
+                          _selectedInvoice!['autoNumber'] ?? '---',
+                          AppColors.textDark),
+                      const Divider(height: 14),
+                      _confirmRow('إجمالي التحصيل',
+                          '${_paymentsTotal.toStringAsFixed(2)} ج.م',
+                          Colors.green.shade700,
+                          bold: true),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                // ── notes ──
+                Container(
+                  decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey.shade300)),
+                  child: TextField(
+                    controller: _notesController,
+                    style: GoogleFonts.cairo(fontSize: 14),
+                    maxLines: 2,
+                    decoration: InputDecoration(
+                      hintText: 'ملاحظات (اختياري)...',
+                      hintStyle:
+                          GoogleFonts.cairo(color: Colors.grey, fontSize: 13),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.all(12),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        padding: const EdgeInsets.symmetric(vertical: 15),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12))),
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _submitCollection();
+                    },
+                    child: Text('تأكيد وحفظ التحصيل',
+                        style: GoogleFonts.cairo(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
   Future<void> _submitCollection() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    if (_selectedCustomer == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('الرجاء اختيار العميل'),
-          backgroundColor: AppColors.error,
-        ),
-      );
-      return;
-    }
-
-    if (_multiplePayments.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('الرجاء إضافة طرق الدفع (على الأقل واحدة)'),
-          backgroundColor: AppColors.error,
-        ),
-      );
-      return;
-    }
-
-    if (_proofImage == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('الرجاء إضافة صورة الإثبات'),
-          backgroundColor: AppColors.error,
-        ),
-      );
-      return;
-    }
-
     setState(() => _isLoading = true);
 
     try {
@@ -477,55 +346,50 @@ class _CollectionScreenState extends State<CollectionScreen> {
         imageName = _proofImage!.name;
       }
 
+      final customerId =
+          int.tryParse(_selectedInvoice!['customerId']?.toString() ?? '0') ?? 0;
+      final invoiceId =
+          int.tryParse(_selectedInvoice!['id']?.toString() ?? '0') ?? 0;
+
       List<String> autoNumbers = [];
       bool allSuccess = true;
-      String errorMessage = '';
+      String errorMsg = '';
 
-      for (var payment in _multiplePayments) {
+      for (final p in _payments) {
         final result = await _apiService.createPayment(
-          bankId: payment['bank']?['id'] ?? 0,
-          customerId: _selectedCustomer!['id'] ?? 0,
-          value: payment['amount'],
+          bankId: (p['bank']?['id'] as num?)?.toInt() ?? 0,
+          customerId: customerId,
+          invoiceId: invoiceId,
+          value: p['amount'] as double,
           notes: _notesController.text.isEmpty ? null : _notesController.text,
           imageBase64: imageBase64,
           imageName: imageName,
         );
 
         if (result['success']) {
-          final paymentData = result['payment'];
-          if (paymentData != null && paymentData['autoNumber'] != null) {
-            autoNumbers.add(paymentData['autoNumber']);
-          }
+          final no = result['payment']?['autoNumber'];
+          if (no != null) autoNumbers.add(no.toString());
         } else {
           allSuccess = false;
-          errorMessage = result['message'];
+          errorMsg = result['message'] ?? 'فشل في التحصيل';
           break;
         }
       }
 
-      setState(() => _isLoading = false);
-
       if (!mounted) return;
+      setState(() => _isLoading = false);
 
       if (allSuccess) {
         _showSuccessDialog(autoNumbers);
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMessage),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(errorMsg), backgroundColor: AppColors.error));
       }
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('حدث خطأ: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('حدث خطأ: $e'), backgroundColor: AppColors.error));
       }
     }
   }
@@ -534,388 +398,561 @@ class _CollectionScreenState extends State<CollectionScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => Directionality(
+      builder: (_) => Directionality(
         textDirection: TextDirection.rtl,
         child: AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Row(
-            children: [
-              const Icon(Icons.check_circle, color: AppColors.success),
-              const SizedBox(width: 8),
-              Text(
-                'تم الحفظ بنجاح',
-                style: GoogleFonts.cairo(fontWeight: FontWeight.bold),
-              ),
-            ],
-          ),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'تم إنشاء سندات القبض التالية:',
-                style: GoogleFonts.cairo(),
-              ),
+              const Icon(Icons.check_circle_outline,
+                  color: Colors.green, size: 80),
+              const SizedBox(height: 16),
+              Text('تم حفظ التحصيل بنجاح',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.cairo(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textDark)),
               const SizedBox(height: 12),
               ...autoNumbers.map((no) => Container(
-                    margin: const EdgeInsets.only(bottom: 4),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    margin: const EdgeInsets.only(bottom: 6),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 10),
                     decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
+                      color: Colors.green.shade50,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.green.shade200),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          'رقم السند:',
-                          style: GoogleFonts.cairo(fontSize: 12),
-                        ),
-                        Text(
-                          no,
-                          style: GoogleFonts.cairo(
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.primary,
-                          ),
-                        ),
+                        Text('رقم السند:',
+                            style: GoogleFonts.cairo(
+                                fontSize: 13, color: Colors.grey.shade600)),
+                        Text(no,
+                            style: GoogleFonts.cairo(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.green.shade700,
+                                fontSize: 14)),
                       ],
                     ),
                   )),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context); // Close dialog
-                Navigator.pop(context); // Back to previous screen
-              },
-              child: Text(
-                'حسناً',
-                style: GoogleFonts.cairo(
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.primary,
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12))),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    Navigator.pop(context);
+                  },
+                  child: Text('حسناً',
+                      style: GoogleFonts.cairo(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold)),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
+
+  // ── build ────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back_ios_new,
-            color: AppColors.textDark,
-            size: 20,
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF5F6FA),
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new,
+                color: AppColors.textDark, size: 20),
+            onPressed: () => Navigator.pop(context),
           ),
-          onPressed: () => Navigator.pop(context),
+          centerTitle: true,
+          title: Text('التحصيل',
+              style: GoogleFonts.cairo(
+                  color: AppColors.textDark,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 22)),
         ),
-        centerTitle: true,
-        title: Text(
-          'التحصيل الالكتروني',
-          style: GoogleFonts.cairo(
-            color: AppColors.textDark,
-            fontWeight: FontWeight.bold,
-            fontSize: 22,
-          ),
+        body: Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildSectionLabel('رقم فاتورة البيع'),
+                    _buildSearchBar(),
+                    if (_isFetchingInvoice)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 30),
+                        child: Center(child: CircularProgressIndicator()),
+                      ),
+                    if (_selectedInvoice != null && !_isFetchingInvoice) ...[
+                      const SizedBox(height: 16),
+                      _buildInvoiceCard(),
+                      const SizedBox(height: 24),
+                      _buildSectionLabel('تفاصيل التحصيل'),
+                      _buildPaymentForm(),
+                      const SizedBox(height: 24),
+                      _buildSectionLabel('صورة الإيصال'),
+                      _buildImagePicker(),
+                      const SizedBox(height: 20),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            if (_selectedInvoice != null && !_isFetchingInvoice)
+              _buildBottomBar(),
+          ],
         ),
       ),
-      body: Directionality(
-        textDirection: TextDirection.rtl,
-        child: Form(
-          key: _formKey,
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Customer Selection
-                _buildSectionTitle('العميل المستفيد'),
-                _buildCustomerSelector(),
+    );
+  }
 
-                const SizedBox(height: 24),
+  // ── widgets ──────────────────────────────────────────────────
 
-                // Payment Details
-                _buildSectionTitle('إضافة مبالغ للتحصيل (متعدد)'),
-                _buildMultiplePaymentForm(),
+  Widget _buildSectionLabel(String label) => Padding(
+        padding: const EdgeInsets.only(bottom: 10, right: 2),
+        child: Text(label,
+            style: GoogleFonts.cairo(
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textDark)),
+      );
 
-                const SizedBox(height: 24),
-
-                // Proof Image
-                _buildSectionTitle('صورة إيصال التحصيل'),
-                _buildImagePicker(),
-
-                const SizedBox(height: 24),
-
-                // Notes
-                _buildSectionTitle('ملاحظات المندوب'),
-                _buildNotesField(),
-
-                const SizedBox(height: 32),
-
-                // Submit Button
-                CustomButton(
-                  text: 'تأكيد وحفظ التحصيل',
-                  onPressed: _submitCollection,
-                  isLoading: _isLoading,
+  Widget _buildSearchBar() {
+    return Row(
+      children: [
+        Expanded(
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade300),
+              boxShadow: [
+                BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.02),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4))
+              ],
+            ),
+            child: TextField(
+              controller: _invoiceNumberController,
+              textInputAction: TextInputAction.search,
+              onSubmitted: _searchByAutoNumber,
+              style: GoogleFonts.cairo(fontSize: 14),
+              decoration: InputDecoration(
+                hintText: 'مثال: S-2026-0001',
+                hintStyle: GoogleFonts.cairo(color: Colors.grey, fontSize: 13),
+                prefixIcon: const Icon(Icons.receipt_long_outlined,
+                    color: AppColors.primary, size: 22),
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.search_rounded,
+                      color: AppColors.primary),
+                  onPressed: () =>
+                      _searchByAutoNumber(_invoiceNumberController.text),
                 ),
+                border: InputBorder.none,
+                contentPadding:
+                    const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Container(
+          height: 58,
+          width: 58,
+          decoration: BoxDecoration(
+            color: AppColors.primary,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                  color: AppColors.primary.withValues(alpha: 0.25),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4))
+            ],
+          ),
+          child: IconButton(
+            icon: const Icon(Icons.qr_code_scanner_rounded,
+                color: Colors.white, size: 26),
+            onPressed: _scanQRCode,
+          ),
+        ),
+      ],
+    );
+  }
 
-                const SizedBox(height: 20),
+  Widget _buildInvoiceCard() {
+    final inv = _selectedInvoice!;
+    final sale = (inv['finalValue'] as num?)?.toDouble() ?? 0;
+    final ret = (inv['returnTotal'] as num?)?.toDouble() ?? 0;
+    final net = sale - ret;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 12,
+              offset: const Offset(0, 4))
+        ],
+      ),
+      child: Column(
+        children: [
+          // ── header: invoice + date ──
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.06),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(16)),
+            ),
+            child: Row(
+              children: [
+                // invoice badge
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    inv['autoNumber']?.toString() ?? '---',
+                    style: GoogleFonts.cairo(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                        color: AppColors.primary),
+                  ),
+                ),
+                const Spacer(),
+                Icon(Icons.calendar_today_outlined,
+                    size: 13, color: Colors.grey.shade500),
+                const SizedBox(width: 4),
+                Text(inv['invDate']?.toString() ?? '---',
+                    style: GoogleFonts.cairo(
+                        fontSize: 12, color: Colors.grey.shade500)),
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSectionTitle(String title) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Text(
-        title,
-        style: GoogleFonts.cairo(
-          fontSize: 16,
-          fontWeight: FontWeight.bold,
-          color: AppColors.textDark,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCustomerSelector() {
-    return InkWell(
-      onTap: _showCustomerSearch,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade300),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.person_search_rounded, color: AppColors.primary),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                _selectedCustomer == null
-                    ? 'اضغط للبحث عن عميل...'
-                    : '${_selectedCustomer!['customerCode'] ?? '---'} - ${_selectedCustomer!['nameAr'] ?? '---'}',
-                style: GoogleFonts.cairo(
-                  color: _selectedCustomer == null
-                      ? AppColors.textLight
-                      : AppColors.textDark,
-                  fontWeight: _selectedCustomer == null
-                      ? FontWeight.normal
-                      : FontWeight.bold,
+          // ── customer ──
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(Icons.person_outline,
+                      size: 22, color: Colors.blue.shade700),
                 ),
-              ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('العميل',
+                          style: GoogleFonts.cairo(
+                              fontSize: 11, color: Colors.grey.shade500)),
+                      Text(
+                        inv['customerName']?.toString() ?? '---',
+                        style: GoogleFonts.cairo(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textDark),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            const Icon(Icons.arrow_drop_down, color: AppColors.textLight),
-          ],
-        ),
+          ),
+          // ── financial summary ──
+          Container(
+            margin: const EdgeInsets.fromLTRB(12, 0, 12, 14),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF5F6FA),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                    child: _finCell('إجمالي المبيعات',
+                        '${sale.toStringAsFixed(2)} ج.م',
+                        Colors.blue.shade700)),
+                Container(
+                    width: 1, height: 36, color: Colors.grey.shade300),
+                Expanded(
+                    child: _finCell('إجمالي المرتجعات',
+                        '${ret.toStringAsFixed(2)} ج.م',
+                        Colors.orange.shade700)),
+                Container(
+                    width: 1, height: 36, color: Colors.grey.shade300),
+                Expanded(
+                    child: _finCell('المفروض يتحصل',
+                        '${net.toStringAsFixed(2)} ج.م',
+                        Colors.green.shade700,
+                        bold: true)),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildMultiplePaymentForm() {
+  Widget _finCell(String label, String value, Color color,
+      {bool bold = false}) {
     return Column(
       children: [
-        // Amount and Add Button Row
-        Row(
-          children: [
-            Expanded(
-              child: TextFormField(
-                controller: _amountController,
-                keyboardType: TextInputType.number,
-                style: GoogleFonts.cairo(fontSize: 14),
-                decoration: InputDecoration(
-                  labelText: 'المبلغ المحصل',
-                  labelStyle: GoogleFonts.cairo(fontSize: 12),
-                  filled: true,
-                  fillColor: Colors.white,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 12,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
+        Text(label,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.cairo(
+                fontSize: 10, color: Colors.grey.shade500)),
+        const SizedBox(height: 3),
+        Text(value,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.cairo(
+                fontSize: bold ? 13 : 12,
+                fontWeight: bold ? FontWeight.w900 : FontWeight.bold,
+                color: color)),
+      ],
+    );
+  }
+
+  Widget _buildPaymentForm() {
+    return Column(
+      children: [
+        // ── amount field ──
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey.shade300),
+            boxShadow: [
+              BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.02),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3))
+            ],
+          ),
+          child: TextField(
+            controller: _amountController,
+            keyboardType:
+                const TextInputType.numberWithOptions(decimal: true),
+            style: GoogleFonts.cairo(
+                fontSize: 16, fontWeight: FontWeight.bold),
+            decoration: InputDecoration(
+              hintText: 'أدخل المبلغ',
+              hintStyle:
+                  GoogleFonts.cairo(color: Colors.grey, fontSize: 14),
+              prefixIcon: Container(
+                margin: const EdgeInsets.all(10),
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
                 ),
+                child: const Icon(Icons.payments_outlined,
+                    color: AppColors.primary, size: 20),
               ),
+              suffixText: 'ج.م',
+              suffixStyle: GoogleFonts.cairo(
+                  color: Colors.grey.shade600,
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold),
+              border: InputBorder.none,
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 18),
             ),
-            const SizedBox(width: 8),
-            IconButton(
-              onPressed: _addPaymentEntry,
-              icon: const Icon(Icons.add_circle, color: AppColors.primary),
-              iconSize: 40,
-            ),
-          ],
+          ),
         ),
-        const SizedBox(height: 12),
-        // Bank Selection Row
+        const SizedBox(height: 10),
+        // ── bank dropdown ──
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: Colors.grey.shade300),
+            boxShadow: [
+              BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.02),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3))
+            ],
           ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<Map<String, dynamic>>(
-              isExpanded: true,
-              hint: Text(
-                'اختر البنك / طريقة التحويل...',
-                style: GoogleFonts.cairo(fontSize: 12),
+          child: Row(
+            children: [
+              Container(
+                margin: const EdgeInsets.symmetric(vertical: 10),
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(Icons.account_balance_outlined,
+                    color: Colors.blue.shade700, size: 20),
               ),
-              value: _selectedBank,
-              style: GoogleFonts.cairo(fontSize: 12, color: AppColors.textDark),
-              items: _banks.map((bank) {
-                return DropdownMenuItem(
-                  value: bank,
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.account_balance,
-                        size: 16,
-                        color: AppColors.primary,
+              const SizedBox(width: 8),
+              Expanded(
+                child: _isFetchingBanks
+                    ? const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 18),
+                        child: Center(
+                            child: SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2))),
+                      )
+                    : DropdownButtonHideUnderline(
+                        child: DropdownButton<Map<String, dynamic>>(
+                          isExpanded: true,
+                          hint: Text('اختر البنك / طريقة التحصيل',
+                              style: GoogleFonts.cairo(
+                                  fontSize: 13, color: Colors.grey)),
+                          value: _selectedBank,
+                          style: GoogleFonts.cairo(
+                              fontSize: 14, color: AppColors.textDark),
+                          items: _banks.map((b) {
+                            return DropdownMenuItem(
+                              value: b,
+                              child: Text(b['nameAr'] ?? '',
+                                  overflow: TextOverflow.ellipsis,
+                                  style: GoogleFonts.cairo(fontSize: 14)),
+                            );
+                          }).toList(),
+                          onChanged: (v) =>
+                              setState(() => _selectedBank = v),
+                        ),
                       ),
-                      const SizedBox(width: 8),
-                      Text(bank['nameAr'] ?? ''),
-                    ],
-                  ),
-                );
-              }).toList(),
-              onChanged: (value) {
-                setState(() {
-                  _selectedBank = value;
-                });
-              },
-            ),
+              ),
+            ],
           ),
         ),
-
-        const SizedBox(height: 16),
-
-        // Payment List
-        if (_multiplePayments.isNotEmpty) ...[
+        const SizedBox(height: 12),
+        // ── add button ──
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+              elevation: 2,
+            ),
+            onPressed: _addPayment,
+            icon: const Icon(Icons.add_rounded, color: Colors.white),
+            label: Text('إضافة إلى قائمة التحصيل',
+                style: GoogleFonts.cairo(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14)),
+          ),
+        ),
+        // ── payment list ──
+        if (_payments.isNotEmpty) ...[
+          const SizedBox(height: 14),
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(14),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
+                    color: Colors.black.withValues(alpha: 0.04),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3))
               ],
             ),
             child: Column(
               children: [
-                ..._multiplePayments.asMap().entries.map((entry) {
-                  final index = entry.key;
-                  final payment = entry.value;
-
+                ..._payments.asMap().entries.map((e) {
+                  final idx = e.key;
+                  final p = e.value;
                   return Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade50,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(
-                              color: AppColors.primary.withOpacity(0.1),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.payments_outlined,
-                              color: AppColors.primary,
-                              size: 16,
-                            ),
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.green.shade50,
+                            borderRadius: BorderRadius.circular(8),
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '${formatMoney(payment['amount'])} جنيه',
+                          child: Icon(Icons.payments_outlined,
+                              size: 16, color: Colors.green.shade700),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                  '${(p['amount'] as double).toStringAsFixed(2)} ج.م',
                                   style: GoogleFonts.cairo(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 15,
-                                  ),
-                                ),
-                                Text(
-                                  payment['bank']?['nameAr'] ?? 'غير معروف',
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14)),
+                              Text(p['bank']?['nameAr'] ?? '',
                                   style: GoogleFonts.cairo(
-                                    color: AppColors.textLight,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
-                            ),
+                                      fontSize: 11,
+                                      color: Colors.grey.shade500)),
+                            ],
                           ),
-                          IconButton(
-                            onPressed: () => _removePaymentEntry(index),
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                            icon: const Icon(
-                              Icons.remove_circle_outline,
-                              color: AppColors.error,
-                              size: 22,
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                        IconButton(
+                          onPressed: () => _removePayment(idx),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          icon: const Icon(Icons.remove_circle_outline,
+                              color: AppColors.error, size: 22),
+                        ),
+                      ],
                     ),
                   );
                 }),
-                const Divider(),
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'إجمالي المبلغ:',
+                const Divider(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('الإجمالي المدخل:',
                         style: GoogleFonts.cairo(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Text(
-                        '${formatMoney(_getTotalAmount())} جنيه',
+                            fontSize: 13, fontWeight: FontWeight.bold)),
+                    Text('${_paymentsTotal.toStringAsFixed(2)} ج.م',
                         style: GoogleFonts.cairo(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.primary,
-                        ),
-                      ),
-                    ],
-                  ),
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.primary)),
+                  ],
                 ),
               ],
             ),
@@ -933,33 +970,30 @@ class _CollectionScreenState extends State<CollectionScreen> {
             borderRadius: BorderRadius.circular(12),
             child: FutureBuilder<Uint8List>(
               future: _proofImage!.readAsBytes(),
-              builder: (context, snapshot) {
-                if (snapshot.hasData) {
-                  return Image.memory(
-                    snapshot.data!,
-                    height: 200,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                  );
+              builder: (_, snap) {
+                if (snap.hasData) {
+                  return Image.memory(snap.data!,
+                      height: 180,
+                      width: double.infinity,
+                      fit: BoxFit.cover);
                 }
-                return const SizedBox(height: 200, child: Center(child: CircularProgressIndicator()));
+                return const SizedBox(
+                    height: 180,
+                    child: Center(child: CircularProgressIndicator()));
               },
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
         ],
         InkWell(
-          onTap: _showImageSourceDialog,
+          onTap: _showImageSourceSheet,
           borderRadius: BorderRadius.circular(12),
           child: Container(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: Colors.grey.shade300,
-                style: BorderStyle.solid,
-              ),
+              border: Border.all(color: Colors.grey.shade300),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -968,13 +1002,11 @@ class _CollectionScreenState extends State<CollectionScreen> {
                   _proofImage == null ? Icons.add_a_photo : Icons.edit,
                   color: AppColors.primary,
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
                 Text(
-                  _proofImage == null ? 'إضافة صورة' : 'تغيير الصورة',
+                  _proofImage == null ? 'إضافة صورة الإيصال' : 'تغيير الصورة',
                   style: GoogleFonts.cairo(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.bold,
-                  ),
+                      color: AppColors.primary, fontWeight: FontWeight.bold),
                 ),
               ],
             ),
@@ -984,25 +1016,90 @@ class _CollectionScreenState extends State<CollectionScreen> {
     );
   }
 
-  Widget _buildNotesField() {
-    return TextFormField(
-      controller: _notesController,
-      maxLines: 4,
-      style: GoogleFonts.cairo(),
-      decoration: InputDecoration(
-        hintText: 'أضف ملاحظات...',
-        hintStyle: GoogleFonts.cairo(color: AppColors.textLight),
-        filled: true,
-        fillColor: Colors.white,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.grey.shade300),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.grey.shade300),
+  Widget _buildBottomBar() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, -5))
+        ],
+      ),
+      child: SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // ── quick totals ──
+            Row(
+              children: [
+                Expanded(
+                    child: _miniTotal('المفروض يتحصل',
+                        '${_netToCollect.toStringAsFixed(2)} ج.م',
+                        Colors.grey.shade700)),
+                Container(
+                    width: 1, height: 32, color: Colors.grey.shade200,
+                    margin: const EdgeInsets.symmetric(horizontal: 12)),
+                Expanded(
+                    child: _miniTotal('المدخل',
+                        '${_paymentsTotal.toStringAsFixed(2)} ج.م',
+                        _paymentsTotal >= _netToCollect && _netToCollect > 0
+                            ? Colors.green.shade700
+                            : AppColors.primary)),
+              ],
+            ),
+            const SizedBox(height: 10),
+            CustomButton(
+              text: 'حفظ التحصيل',
+              isLoading: _isLoading,
+              onPressed: _showConfirmSheet,
+            ),
+            const SizedBox(height: 4),
+          ],
         ),
       ),
     );
   }
+
+  Widget _miniTotal(String label, String value, Color valueColor) {
+    return Column(
+      children: [
+        Text(label,
+            style:
+                GoogleFonts.cairo(fontSize: 11, color: Colors.grey.shade500)),
+        Text(value,
+            style: GoogleFonts.cairo(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: valueColor)),
+      ],
+    );
+  }
+
+  Widget _confirmRow(String label, String value, Color valueColor,
+      {bool bold = false}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label,
+            style: GoogleFonts.cairo(
+                fontSize: 13, color: Colors.grey.shade600)),
+        Flexible(
+          child: Text(value,
+              textAlign: TextAlign.end,
+              style: GoogleFonts.cairo(
+                  fontSize: bold ? 15 : 13,
+                  fontWeight:
+                      bold ? FontWeight.bold : FontWeight.w600,
+                  color: valueColor)),
+        ),
+      ],
+    );
+  }
+}
+
+String formatMoney(double value) {
+  return value.toStringAsFixed(2);
 }

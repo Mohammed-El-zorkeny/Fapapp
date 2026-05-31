@@ -3,7 +3,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../utils/app_colors.dart';
 import '../services/api_service.dart';
+import '../services/storage_service.dart';
 import '../widgets/custom_button.dart';
+import 'collection_screen.dart';
 
 class ReturnsScreen extends StatefulWidget {
   const ReturnsScreen({super.key});
@@ -15,46 +17,58 @@ class ReturnsScreen extends StatefulWidget {
 class _ReturnsScreenState extends State<ReturnsScreen> {
   final _formKey = GlobalKey<FormState>();
   final ApiService _apiService = ApiService();
-  final TextEditingController _invoiceController = TextEditingController();
-  final TextEditingController _searchController = TextEditingController();
-  final TextEditingController _invoiceSearchController =
+  final StorageService _storageService = StorageService();
+  int _salesmanId = 0;
+  final TextEditingController _invoiceNumberController =
       TextEditingController();
   final TextEditingController _itemSearchController = TextEditingController();
   final TextEditingController _notesController = TextEditingController();
 
-  Map<String, dynamic>? _selectedCustomer;
   Map<String, dynamic>? _selectedInvoice;
   List<Map<String, dynamic>> _invoiceItems = [];
   List<Map<String, dynamic>> _filteredInvoiceItems = [];
   bool _isLoading = false;
-  bool _isFetchingCustomers = false;
-  bool _isFetchingInvoices = false;
+  bool _isFetchingInvoice = false;
   bool _isFetchingItems = false;
   String _itemSearchQuery = '';
 
-  // Customer search & pagination
-  final List<Map<String, dynamic>> _customers = [];
-  String _customerSearchQuery = '';
-  int _customerCurrentPage = 0;
+  // ── computed totals ──────────────────────────────────────────
+  double get _invoiceTotal =>
+      (_selectedInvoice?['finalValue'] as num?)?.toDouble() ?? 0;
 
-  // Invoice search & pagination
-  final List<Map<String, dynamic>> _invoices = [];
-  String _invoiceSearchQuery = '';
-  int _invoiceCurrentPage = 0;
-  static const int _pageSize = 10;
+  double get _returnTotal => _invoiceItems.fold(0.0, (sum, item) {
+        final returnQty = int.tryParse(item['controller'].text) ?? 0;
+        return sum + _unitFinalValue(item) * returnQty;
+      });
+
+  double get _remainingTotal => _invoiceTotal - _returnTotal;
+
+  double _unitFinalValue(Map<String, dynamic> item) {
+    final soldQty = (item['qty'] as num?)?.toInt() ?? 1;
+    final lineFinal = (item['finalValue'] as num?)?.toDouble() ?? 0;
+    return soldQty > 0 ? lineFinal / soldQty : 0;
+  }
+  // ─────────────────────────────────────────────────────────────
 
   @override
   void initState() {
     super.initState();
-    _fetchCustomers();
     _itemSearchController.addListener(_filterItems);
+    _loadSalesmanId();
+  }
+
+  Future<void> _loadSalesmanId() async {
+    final userData = await _storageService.getUserData();
+    if (mounted && userData != null) {
+      setState(() {
+        _salesmanId = int.tryParse(userData['userId']?.toString() ?? '0') ?? 0;
+      });
+    }
   }
 
   @override
   void dispose() {
-    _invoiceController.dispose();
-    _searchController.dispose();
-    _invoiceSearchController.dispose();
+    _invoiceNumberController.dispose();
     _itemSearchController.dispose();
     _notesController.dispose();
     super.dispose();
@@ -63,499 +77,93 @@ class _ReturnsScreenState extends State<ReturnsScreen> {
   void _filterItems() {
     setState(() {
       _itemSearchQuery = _itemSearchController.text.toLowerCase();
-      if (_itemSearchQuery.isEmpty) {
-        _filteredInvoiceItems = List.from(_invoiceItems);
-      } else {
-        _filteredInvoiceItems = _invoiceItems.where((item) {
-          final name = (item['nameAr'] ?? '').toString().toLowerCase();
-          final code = (item['itemCode'] ?? '').toString().toLowerCase();
-          return name.contains(_itemSearchQuery) ||
-              code.contains(_itemSearchQuery);
-        }).toList();
-      }
+      _filteredInvoiceItems = _itemSearchQuery.isEmpty
+          ? List.from(_invoiceItems)
+          : _invoiceItems.where((item) {
+              final name = (item['nameAr'] ?? '').toString().toLowerCase();
+              final code = (item['itemCode'] ?? '').toString().toLowerCase();
+              return name.contains(_itemSearchQuery) ||
+                  code.contains(_itemSearchQuery);
+            }).toList();
     });
   }
 
-  Future<void> _fetchCustomers() async {
-    setState(() => _isFetchingCustomers = true);
-    final result = await _apiService.getCustomers();
-    if (mounted) {
-      setState(() {
-        _isFetchingCustomers = false;
-        if (result['success']) {
-          _customers.clear();
-          final List<dynamic> data = result['data'] ?? [];
-          _customers.addAll(
-            data.map((e) => Map<String, dynamic>.from(e)).toList(),
-          );
-        }
-      });
-    }
-  }
-
-  Future<void> _fetchInvoices() async {
-    if (_selectedCustomer == null) return;
+  Future<void> _searchByAutoNumber(String autoNumber) async {
+    final trimmed = autoNumber.trim();
+    if (trimmed.isEmpty) return;
 
     setState(() {
-      _isFetchingInvoices = true;
-      _invoices.clear();
+      _isFetchingInvoice = true;
       _selectedInvoice = null;
-      _invoiceItems.clear();
-      _filteredInvoiceItems.clear();
+      _invoiceItems = [];
+      _filteredInvoiceItems = [];
+      _itemSearchController.clear();
     });
 
-    final customerId =
-        int.tryParse(_selectedCustomer!['id']?.toString() ?? '0') ?? 0;
-    final result = await _apiService.getInvoicesByCustomer(customerId);
+    final result = await _apiService.getInvoiceByAutoNumber(trimmed);
+    if (!mounted) return;
 
-    if (mounted) {
+    if (result['success']) {
+      final invoice = result['data'] as Map<String, dynamic>;
       setState(() {
-        _isFetchingInvoices = false;
-        if (result['success']) {
-          final List<dynamic> data = result['data'] ?? [];
-          _invoices.addAll(
-            data.map((e) => Map<String, dynamic>.from(e)).toList(),
-          );
-        }
+        _isFetchingInvoice = false;
+        _selectedInvoice = invoice;
       });
+      final id = invoice['id'] is int
+          ? invoice['id'] as int
+          : int.tryParse(invoice['id'].toString()) ?? 0;
+      _fetchInvoiceItems(id);
+    } else {
+      setState(() => _isFetchingInvoice = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(result['message'] ?? 'لم يتم العثور على الفاتورة'),
+          backgroundColor: AppColors.error,
+        ));
+      }
     }
   }
 
-  List<Map<String, dynamic>> get _filteredCustomers {
-    List<Map<String, dynamic>> filtered = _customers;
-    if (_customerSearchQuery.isNotEmpty) {
-      final query = _customerSearchQuery.toLowerCase();
-      filtered = _customers.where((customer) {
-        final nameAr = (customer['nameAr'] ?? '').toString().toLowerCase();
-        final code = (customer['customerCode'] ?? '').toString().toLowerCase();
-        return nameAr.contains(query) || code.contains(query);
-      }).toList();
-    }
-    return filtered;
-  }
-
-  List<Map<String, dynamic>> get _paginatedCustomers {
-    final filtered = _filteredCustomers;
-    final start = _customerCurrentPage * _pageSize;
-    if (start >= filtered.length) return [];
-    final end = (start + _pageSize) > filtered.length
-        ? filtered.length
-        : (start + _pageSize);
-    return filtered.sublist(start, end);
-  }
-
-  void _showCustomerSearch() {
-    _customerSearchQuery = '';
-    _searchController.clear();
-    _customerCurrentPage = 0;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Directionality(
-        textDirection: TextDirection.rtl,
-        child: StatefulBuilder(
-          builder: (context, setModalState) => Container(
-            height: MediaQuery.of(context).size.height * 0.8,
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-            ),
-            child: Column(
-              children: [
-                Container(
-                  margin: const EdgeInsets.only(top: 8, bottom: 16),
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: TextField(
-                    controller: _searchController,
-                    onChanged: (value) {
-                      setModalState(() {
-                        _customerSearchQuery = value;
-                        _customerCurrentPage = 0;
-                      });
-                    },
-                    decoration: InputDecoration(
-                      hintText: 'ابحث باسم أو كود العميل...',
-                      prefixIcon: const Icon(Icons.search),
-                      filled: true,
-                      fillColor: Colors.grey.shade100,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Expanded(
-                  child: _isFetchingCustomers
-                      ? const Center(child: CircularProgressIndicator())
-                      : _filteredCustomers.isEmpty
-                      ? Center(
-                          child: Text(
-                            'لا يوجد عملاء مطابقتين للبحث',
-                            style: GoogleFonts.cairo(
-                              color: AppColors.textLight,
-                            ),
-                          ),
-                        )
-                      : Column(
-                          children: [
-                            Expanded(
-                              child: ListView.separated(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                ),
-                                itemCount: _paginatedCustomers.length,
-                                separatorBuilder: (context, index) =>
-                                    const Divider(),
-                                itemBuilder: (context, index) {
-                                  final customer = _paginatedCustomers[index];
-                                  final isSelected =
-                                      _selectedCustomer?['customerCode'] ==
-                                      customer['customerCode'];
-                                  return ListTile(
-                                    leading: CircleAvatar(
-                                      backgroundColor: AppColors.primary
-                                          .withOpacity(0.1),
-                                      child: const Icon(
-                                        Icons.person,
-                                        color: AppColors.primary,
-                                      ),
-                                    ),
-                                    onTap: () {
-                                      setState(() {
-                                        _selectedCustomer = customer;
-                                        _fetchInvoices();
-                                      });
-                                      Navigator.pop(context);
-                                    },
-                                    title: Text(
-                                      customer['nameAr'] ?? 'بدون اسم',
-                                      style: GoogleFonts.cairo(
-                                        fontWeight: isSelected
-                                            ? FontWeight.bold
-                                            : FontWeight.normal,
-                                      ),
-                                    ),
-                                    subtitle: Text(
-                                      'كود: ${customer['customerCode'] ?? '---'}',
-                                      style: GoogleFonts.cairo(fontSize: 12),
-                                    ),
-                                    trailing: isSelected
-                                        ? const Icon(
-                                            Icons.check_circle,
-                                            color: AppColors.primary,
-                                          )
-                                        : null,
-                                  );
-                                },
-                              ),
-                            ),
-                            if (_filteredCustomers.length > _pageSize)
-                              Padding(
-                                padding: const EdgeInsets.all(16.0),
-                                child: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    TextButton.icon(
-                                      onPressed: _customerCurrentPage > 0
-                                          ? () => setModalState(
-                                              () => _customerCurrentPage--,
-                                            )
-                                          : null,
-                                      icon: const Icon(
-                                        Icons.arrow_back_ios,
-                                        size: 16,
-                                      ),
-                                      label: Text(
-                                        'السابق',
-                                        style: GoogleFonts.cairo(),
-                                      ),
-                                    ),
-                                    Text(
-                                      'صفحة ${_customerCurrentPage + 1} من ${(_filteredCustomers.length / _pageSize).ceil()}',
-                                      style: GoogleFonts.cairo(fontSize: 12),
-                                    ),
-                                    TextButton.icon(
-                                      onPressed:
-                                          (_customerCurrentPage + 1) *
-                                                  _pageSize <
-                                              _filteredCustomers.length
-                                          ? () => setModalState(
-                                              () => _customerCurrentPage++,
-                                            )
-                                          : null,
-                                      label: Text(
-                                        'التالي',
-                                        style: GoogleFonts.cairo(),
-                                      ),
-                                      icon: const Icon(
-                                        Icons.arrow_forward_ios,
-                                        size: 16,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                          ],
-                        ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  List<Map<String, dynamic>> get _filteredInvoices {
-    List<Map<String, dynamic>> filtered = _invoices;
-    if (_invoiceSearchQuery.isNotEmpty) {
-      final query = _invoiceSearchQuery.toLowerCase();
-      filtered = _invoices.where((inv) {
-        final autoNum = (inv['autoNumber'] ?? '').toString().toLowerCase();
-        return autoNum.contains(query);
-      }).toList();
-    }
-    return filtered;
-  }
-
-  List<Map<String, dynamic>> get _paginatedInvoices {
-    final filtered = _filteredInvoices;
-    final start = _invoiceCurrentPage * _pageSize;
-    if (start >= filtered.length) return [];
-    final end = (start + _pageSize) > filtered.length
-        ? filtered.length
-        : (start + _pageSize);
-    return filtered.sublist(start, end);
-  }
-
-  void _showInvoiceSearch() {
-    if (_selectedCustomer == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('الرجاء اختيار العميل أولاً')),
-      );
-      return;
-    }
-
-    _invoiceSearchQuery = '';
-    _invoiceSearchController.clear();
-    _invoiceCurrentPage = 0;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Directionality(
-        textDirection: TextDirection.rtl,
-        child: StatefulBuilder(
-          builder: (context, setModalState) => Container(
-            height: MediaQuery.of(context).size.height * 0.8,
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-            ),
-            child: Column(
-              children: [
-                Container(
-                  margin: const EdgeInsets.only(top: 8, bottom: 16),
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: TextField(
-                    controller: _invoiceSearchController,
-                    onChanged: (value) {
-                      setModalState(() {
-                        _invoiceSearchQuery = value;
-                        _invoiceCurrentPage = 0;
-                      });
-                    },
-                    decoration: InputDecoration(
-                      hintText: 'ابحث برقم الفاتورة...',
-                      prefixIcon: const Icon(Icons.search),
-                      filled: true,
-                      fillColor: Colors.grey.shade100,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Expanded(
-                  child: _isFetchingInvoices
-                      ? const Center(child: CircularProgressIndicator())
-                      : _filteredInvoices.isEmpty
-                      ? Center(
-                          child: Text(
-                            'لا توجد فواتير لهذا العميل',
-                            style: GoogleFonts.cairo(
-                              color: AppColors.textLight,
-                            ),
-                          ),
-                        )
-                      : Column(
-                          children: [
-                            Expanded(
-                              child: ListView.separated(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                ),
-                                itemCount: _paginatedInvoices.length,
-                                separatorBuilder: (context, index) =>
-                                    const Divider(),
-                                itemBuilder: (context, index) {
-                                  final invoice = _paginatedInvoices[index];
-                                  final isSelected =
-                                      _selectedInvoice?['autoNumber'] ==
-                                      invoice['autoNumber'];
-                                  return ListTile(
-                                    leading: CircleAvatar(
-                                      backgroundColor: AppColors.primary
-                                          .withOpacity(0.1),
-                                      child: const Icon(
-                                        Icons.description,
-                                        color: AppColors.primary,
-                                      ),
-                                    ),
-                                    onTap: () {
-                                      setState(() {
-                                        _selectedInvoice = invoice;
-                                        _invoiceController.text =
-                                            invoice['autoNumber'] ?? '';
-                                        _fetchInvoiceItemsById(invoice['id']);
-                                      });
-                                      Navigator.pop(context);
-                                    },
-                                    title: Text(
-                                      invoice['autoNumber'] ?? 'بدون رقم',
-                                      style: GoogleFonts.cairo(
-                                        fontWeight: isSelected
-                                            ? FontWeight.bold
-                                            : FontWeight.normal,
-                                      ),
-                                    ),
-                                    trailing: isSelected
-                                        ? const Icon(
-                                            Icons.check_circle,
-                                            color: AppColors.primary,
-                                          )
-                                        : null,
-                                  );
-                                },
-                              ),
-                            ),
-                            if (_filteredInvoices.length > _pageSize)
-                              Padding(
-                                padding: const EdgeInsets.all(16.0),
-                                child: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    IconButton(
-                                      onPressed: _invoiceCurrentPage > 0
-                                          ? () => setModalState(
-                                              () => _invoiceCurrentPage--,
-                                            )
-                                          : null,
-                                      icon: const Icon(
-                                        Icons.arrow_back_ios,
-                                        size: 16,
-                                      ),
-                                    ),
-                                    Text(
-                                      'صفحة ${_invoiceCurrentPage + 1} من ${(_filteredInvoices.length / _pageSize).ceil()}',
-                                      style: GoogleFonts.cairo(fontSize: 12),
-                                    ),
-                                    IconButton(
-                                      onPressed:
-                                          (_invoiceCurrentPage + 1) *
-                                                  _pageSize <
-                                              _filteredInvoices.length
-                                          ? () => setModalState(
-                                              () => _invoiceCurrentPage++,
-                                            )
-                                          : null,
-                                      icon: const Icon(
-                                        Icons.arrow_forward_ios,
-                                        size: 16,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                          ],
-                        ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _fetchInvoiceItemsById(int invoiceId) async {
+  Future<void> _fetchInvoiceItems(int invoiceId) async {
     setState(() => _isFetchingItems = true);
     final result = await _apiService.getInvoiceItemsById(invoiceId);
-    if (mounted) {
-      setState(() {
-        _isFetchingItems = false;
-        if (result['success']) {
-          _invoiceItems = (result['data'] as List).map((item) {
-            return {
-              ...Map<String, dynamic>.from(item),
-              'returnQty': 0,
-              'controller': TextEditingController(text: '0'),
-            };
-          }).toList();
-          _filterItems();
-        } else {
-          _invoiceItems = [];
-          _filteredInvoiceItems = [];
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(result['message'] ?? 'فشل في تحميل الفاتورة'),
-              backgroundColor: AppColors.error,
-            ),
-          );
-        }
-      });
-    }
+    if (!mounted) return;
+    setState(() {
+      _isFetchingItems = false;
+      if (result['success']) {
+        _invoiceItems = (result['data'] as List).map((item) {
+          return {
+            ...Map<String, dynamic>.from(item),
+            'controller': TextEditingController(text: '0'),
+          };
+        }).toList();
+        _filterItems();
+      } else {
+        _invoiceItems = [];
+        _filteredInvoiceItems = [];
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(result['message'] ?? 'فشل في تحميل أصناف الفاتورة'),
+          backgroundColor: AppColors.error,
+        ));
+      }
+    });
   }
 
   void _scanQRCode() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (context) => Container(
+      builder: (context) => SizedBox(
         height: MediaQuery.of(context).size.height * 0.7,
         child: MobileScanner(
           onDetect: (capture) {
-            final List<Barcode> barcodes = capture.barcodes;
+            final barcodes = capture.barcodes;
             if (barcodes.isNotEmpty) {
-              final String? code = barcodes.first.rawValue;
+              final code = barcodes.first.rawValue;
               if (code != null) {
-                _invoiceController.text = code;
                 Navigator.pop(context);
+                _invoiceNumberController.text = code.trim();
+                _searchByAutoNumber(code.trim());
               }
             }
           },
@@ -564,159 +172,332 @@ class _ReturnsScreenState extends State<ReturnsScreen> {
     );
   }
 
-  Future<void> _submitReturn() async {
-    if (_selectedCustomer == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('الرجاء اختيار العميل')));
-      return;
-    }
+  void _showConfirmBottomSheet() {
     if (_selectedInvoice == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('الرجاء اختيار الفاتورة أولاً')),
-      );
+          const SnackBar(content: Text('الرجاء اختيار الفاتورة أولاً')));
       return;
     }
 
-    final returns = _invoiceItems
-        .where((item) {
-          final qtyText = item['controller'].text;
-          final qty = int.tryParse(qtyText) ?? 0;
-          return qty > 0;
-        })
-        .map((item) {
-          return {
-            'invoice_dtl_id': item['invoiceDtlId'] ?? item['invoice_dtl_id'] ?? 0,
-            'qty': int.tryParse(item['controller'].text) ?? 0,
-          };
-        })
-        .toList();
+    final hasReturns = _invoiceItems
+        .any((item) => (int.tryParse(item['controller'].text) ?? 0) > 0);
 
-    if (returns.isEmpty) {
+    if (!hasReturns) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('الرجاء إدخال الكميات المرتجعة')),
-      );
+          const SnackBar(content: Text('الرجاء إدخال الكميات المرتجعة')));
       return;
     }
 
-    setState(() => _isLoading = true);
-    final invoiceSalesId = int.tryParse(_selectedInvoice!['id']?.toString() ?? '0') ?? 0;
-    
-    final result = await _apiService.createReturnInvoice(
-      invoiceSalesId: invoiceSalesId,
-      notes: _notesController.text,
-      items: returns,
-    );
-
-    if (mounted) {
-      setState(() => _isLoading = false);
-      if (result['success']) {
-        final returnData = result['return'] ?? {};
-        final autoNumber = returnData['autoNumber'] ?? '---';
-        
-        _showSuccessDialog(autoNumber);
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result['message'] ?? 'فشل في إرسال المرتجع'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
-    }
-  }
-
-  void _showSuccessDialog(String autoNumber) {
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      barrierDismissible: false,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (context) => Directionality(
         textDirection: TextDirection.rtl,
-        child: AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.check_circle_outline,
-                color: Colors.green,
-                size: 80,
-              ),
-              const SizedBox(height: 20),
-              Text(
-                'تم إنشاء فاتورة المرتجع بنجاح',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.cairo(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textDark,
+        child: Padding(
+          padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom),
+          child: Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(2)),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 15),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 12,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.shade200),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'رقم الفاتورة: ',
-                      style: GoogleFonts.cairo(
-                        color: Colors.grey.shade700,
+                const SizedBox(height: 16),
+                Text('ملاحظات (اختياري)',
+                    style: GoogleFonts.cairo(
                         fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textDark)),
+                const SizedBox(height: 8),
+                Container(
+                  decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey.shade300)),
+                  child: TextField(
+                    controller: _notesController,
+                    autofocus: false,
+                    style: GoogleFonts.cairo(fontSize: 14),
+                    maxLines: 3,
+                    decoration: InputDecoration(
+                      hintText: 'أدخل ملاحظات المرتجع...',
+                      hintStyle:
+                          GoogleFonts.cairo(color: Colors.grey, fontSize: 13),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.all(14),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                // ── ملخص سريع ──
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.grey.shade200)),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _miniSummary('المرتجع',
+                          '${_returnTotal.toStringAsFixed(2)} ج.م',
+                          Colors.orange.shade700),
+                      Container(
+                          width: 1,
+                          height: 30,
+                          color: Colors.grey.shade300),
+                      _miniSummary('المتبقي',
+                          '${_remainingTotal.toStringAsFixed(2)} ج.م',
+                          Colors.green.shade700),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                // ── الأزرار ──
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          padding:
+                              const EdgeInsets.symmetric(vertical: 14),
+                          side: BorderSide(color: AppColors.primary),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _submitReturn(withPayment: false);
+                        },
+                        child: Text('عمل المرتجع',
+                            style: GoogleFonts.cairo(
+                                color: AppColors.primary,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13)),
                       ),
                     ),
-                    Text(
-                      autoNumber,
-                      style: GoogleFonts.cairo(
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.primary,
-                        fontSize: 14,
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          padding:
+                              const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _submitReturn(withPayment: true);
+                        },
+                        child: Text('مرتجع + دفع المتبقي',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.cairo(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12)),
                       ),
                     ),
                   ],
                 ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _miniSummary(String label, String value, Color color) {
+    return Column(
+      children: [
+        Text(label,
+            style: GoogleFonts.cairo(fontSize: 11, color: Colors.grey)),
+        Text(value,
+            style: GoogleFonts.cairo(
+                fontSize: 14, fontWeight: FontWeight.bold, color: color)),
+      ],
+    );
+  }
+
+  Future<void> _submitReturn({required bool withPayment}) async {
+    final returns = _invoiceItems
+        .where((item) => (int.tryParse(item['controller'].text) ?? 0) > 0)
+        .map((item) => {
+              'invoiceDtlId':
+                  item['invoiceDtlId'] ?? item['invoice_dtl_id'] ?? 0,
+              'qty': int.tryParse(item['controller'].text) ?? 0,
+            })
+        .toList();
+
+    setState(() => _isLoading = true);
+    final invoiceSalesId =
+        int.tryParse(_selectedInvoice!['id']?.toString() ?? '0') ?? 0;
+
+    final result = await _apiService.createReturnInvoice(
+      invoiceSalesId: invoiceSalesId,
+      salesmanId: _salesmanId,
+      notes: _notesController.text,
+      items: returns,
+    );
+
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    if (result['success']) {
+      _showSuccessDialog(
+        result['return']?['autoNumber'] ?? '---',
+        withPayment: withPayment,
+        remainingAmount: _remainingTotal,
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(result['message'] ?? 'فشل في إرسال المرتجع'),
+        backgroundColor: AppColors.error,
+      ));
+    }
+  }
+
+  void _showSuccessDialog(String autoNumber,
+      {bool withPayment = false, double remainingAmount = 0}) {
+    final salesInvoiceNumber =
+        _selectedInvoice?['autoNumber']?.toString() ?? '';
+    final outerContext = context;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.check_circle_outline,
+                  color: Colors.green, size: 80),
+              const SizedBox(height: 20),
+              Text('تم إنشاء فاتورة المرتجع بنجاح',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.cairo(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textDark)),
+              const SizedBox(height: 15),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                decoration: BoxDecoration(
+                    color: Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey.shade200)),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Text('رقم المرتجع: ',
+                      style: GoogleFonts.cairo(
+                          color: Colors.grey.shade700, fontSize: 14)),
+                  Text(autoNumber,
+                      style: GoogleFonts.cairo(
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primary,
+                          fontSize: 14)),
+                ]),
               ),
-              const SizedBox(height: 30),
+              if (withPayment) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.green.shade50,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.green.shade200),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('المبلغ المتبقي للتحصيل:',
+                          style: GoogleFonts.cairo(
+                              fontSize: 13,
+                              color: Colors.grey.shade700)),
+                      Text('${remainingAmount.toStringAsFixed(2)} ج.م',
+                          style: GoogleFonts.cairo(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.green.shade700)),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 20),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    padding: const EdgeInsets.symmetric(vertical: 15),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
+                      backgroundColor: AppColors.primary,
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12))),
                   onPressed: () {
-                    Navigator.pop(context); // Dialog
-                    Navigator.pop(context); // Screen
+                    Navigator.pop(dialogContext);
+                    if (withPayment) {
+                      Navigator.pushReplacement(
+                        outerContext,
+                        MaterialPageRoute(
+                          builder: (_) => CollectionScreen(
+                            initialInvoiceNumber: salesInvoiceNumber,
+                            initialAmount: remainingAmount,
+                          ),
+                        ),
+                      );
+                    } else {
+                      Navigator.pop(outerContext);
+                    }
                   },
                   child: Text(
-                    'حسناً',
+                    withPayment ? 'الانتقال للتحصيل الآن' : 'حسناً',
                     style: GoogleFonts.cairo(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
+              if (withPayment) ...[
+                const SizedBox(height: 10),
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(dialogContext);
+                    Navigator.pop(outerContext);
+                  },
+                  child: Text('لاحقاً',
+                      style: GoogleFonts.cairo(
+                          fontSize: 14, color: Colors.grey)),
+                ),
+              ],
             ],
           ),
         ),
       ),
     );
   }
+
+  // ── build ────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -728,22 +509,16 @@ class _ReturnsScreenState extends State<ReturnsScreen> {
           backgroundColor: Colors.white,
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(
-              Icons.arrow_back_ios_new,
-              color: AppColors.textDark,
-              size: 20,
-            ),
+            icon: const Icon(Icons.arrow_back_ios_new,
+                color: AppColors.textDark, size: 20),
             onPressed: () => Navigator.pop(context),
           ),
           centerTitle: true,
-          title: Text(
-            'المرتجعات',
-            style: GoogleFonts.cairo(
-              color: AppColors.textDark,
-              fontWeight: FontWeight.bold,
-              fontSize: 22,
-            ),
-          ),
+          title: Text('المرتجعات',
+              style: GoogleFonts.cairo(
+                  color: AppColors.textDark,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 22)),
         ),
         body: Column(
           children: [
@@ -755,21 +530,17 @@ class _ReturnsScreenState extends State<ReturnsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildSectionTitle('اختيار العميل'),
-                      _buildCustomerSelector(),
-                      const SizedBox(height: 20),
-                      _buildSectionTitle('بيانات الفاتورة'),
-                      _buildInvoiceSelector(),
-                      if (_invoiceItems.isNotEmpty) ...[
-                        const SizedBox(height: 20),
-                        _buildSectionTitle('ملاحظات'),
-                        _buildNotesField(),
-                      ],
-                      if (_isFetchingItems)
+                      _buildSectionTitle('رقم فاتورة البيع'),
+                      _buildSearchBar(),
+                      if (_isFetchingInvoice || _isFetchingItems)
                         const Padding(
-                          padding: EdgeInsets.all(40),
+                          padding: EdgeInsets.symmetric(vertical: 30),
                           child: Center(child: CircularProgressIndicator()),
                         ),
+                      if (_selectedInvoice != null && !_isFetchingInvoice) ...[
+                        const SizedBox(height: 16),
+                        _buildInvoiceInfoCard(),
+                      ],
                       if (_invoiceItems.isNotEmpty) ...[
                         const SizedBox(height: 20),
                         _buildItemSearchField(),
@@ -788,122 +559,52 @@ class _ReturnsScreenState extends State<ReturnsScreen> {
     );
   }
 
-  Widget _buildSectionTitle(String title) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12, right: 4),
-      child: Text(
-        title,
-        style: GoogleFonts.cairo(
-          fontSize: 16,
-          fontWeight: FontWeight.bold,
-          color: AppColors.textDark,
-        ),
-      ),
-    );
-  }
+  // ── widgets ──────────────────────────────────────────────────
 
-  Widget _buildCustomerSelector() {
-    return InkWell(
-      onTap: _showCustomerSearch,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade300),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.02),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            const Icon(
-              Icons.person_pin_rounded,
-              color: AppColors.primary,
-              size: 24,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                _selectedCustomer == null
-                    ? 'بحث عن عميل...'
-                    : '${_selectedCustomer!['customerCode'] ?? '---'} - ${_selectedCustomer!['nameAr'] ?? '---'}',
-                style: GoogleFonts.cairo(
-                  fontSize: 14,
-                  color: _selectedCustomer == null
-                      ? AppColors.textLight
-                      : AppColors.textDark,
-                  fontWeight: _selectedCustomer == null
-                      ? FontWeight.normal
-                      : FontWeight.bold,
-                ),
-              ),
-            ),
-            const Icon(
-              Icons.keyboard_arrow_down_rounded,
-              color: AppColors.textLight,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget _buildSectionTitle(String title) => Padding(
+        padding: const EdgeInsets.only(bottom: 12, right: 4),
+        child: Text(title,
+            style: GoogleFonts.cairo(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textDark)),
+      );
 
-  Widget _buildInvoiceSelector() {
+  Widget _buildSearchBar() {
     return Row(
       children: [
         Expanded(
-          child: InkWell(
-            onTap: _showInvoiceSearch,
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.shade300),
-                boxShadow: [
-                  BoxShadow(
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade300),
+              boxShadow: [
+                BoxShadow(
                     color: Colors.black.withOpacity(0.02),
                     blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.document_scanner_outlined,
-                    color: AppColors.primary,
-                    size: 24,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      _selectedInvoice == null
-                          ? 'اختيار الفاتورة...'
-                          : (_selectedInvoice!['autoNumber'] ?? '---'),
-                      style: GoogleFonts.cairo(
-                        fontSize: 14,
-                        color: _selectedInvoice == null
-                            ? AppColors.textLight
-                            : AppColors.textDark,
-                        fontWeight: _selectedInvoice == null
-                            ? FontWeight.normal
-                            : FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  const Icon(
-                    Icons.keyboard_arrow_down_rounded,
-                    color: AppColors.textLight,
-                  ),
-                ],
+                    offset: const Offset(0, 4))
+              ],
+            ),
+            child: TextField(
+              controller: _invoiceNumberController,
+              textInputAction: TextInputAction.search,
+              onSubmitted: _searchByAutoNumber,
+              style: GoogleFonts.cairo(fontSize: 14),
+              decoration: InputDecoration(
+                hintText: 'مثال: S-2025-0001',
+                hintStyle: GoogleFonts.cairo(color: Colors.grey, fontSize: 13),
+                prefixIcon: const Icon(Icons.receipt_long_outlined,
+                    color: AppColors.primary, size: 22),
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.search_rounded,
+                      color: AppColors.primary),
+                  onPressed: () =>
+                      _searchByAutoNumber(_invoiceNumberController.text),
+                ),
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(
+                    vertical: 16, horizontal: 12),
               ),
             ),
           ),
@@ -917,18 +618,14 @@ class _ReturnsScreenState extends State<ReturnsScreen> {
             borderRadius: BorderRadius.circular(12),
             boxShadow: [
               BoxShadow(
-                color: AppColors.primary.withOpacity(0.2),
-                blurRadius: 8,
-                offset: const Offset(0, 4),
-              ),
+                  color: AppColors.primary.withOpacity(0.2),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4))
             ],
           ),
           child: IconButton(
-            icon: const Icon(
-              Icons.qr_code_scanner_rounded,
-              color: Colors.white,
-              size: 26,
-            ),
+            icon: const Icon(Icons.qr_code_scanner_rounded,
+                color: Colors.white, size: 26),
             onPressed: _scanQRCode,
           ),
         ),
@@ -936,218 +633,278 @@ class _ReturnsScreenState extends State<ReturnsScreen> {
     );
   }
 
-  Widget _buildNotesField() {
+  /// Invoice info in a 2-column grid
+  Widget _buildInvoiceInfoCard() {
+    final inv = _selectedInvoice!;
     return Container(
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.primary.withOpacity(0.05),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade300),
+        border: Border.all(color: AppColors.primary.withOpacity(0.2)),
       ),
-      child: TextField(
-        controller: _notesController,
-        style: GoogleFonts.cairo(fontSize: 14),
-        maxLines: 2,
-        decoration: InputDecoration(
-          hintText: 'ملاحظات (اختياري)...',
-          hintStyle: GoogleFonts.cairo(color: Colors.grey, fontSize: 13),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.all(16),
-        ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _infoCell(Icons.receipt_long, 'رقم الفاتورة',
+                    inv['autoNumber']?.toString() ?? '---'),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _infoCell(Icons.person_outline, 'العميل',
+                    inv['customerName']?.toString() ?? '---'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _infoCell(Icons.calendar_today_outlined, 'التاريخ',
+                    inv['invDate']?.toString() ?? '---'),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _infoCell(
+                  Icons.monetization_on_outlined,
+                  'الإجمالي',
+                  '${inv['finalValue']?.toString() ?? '---'} ج.م',
+                  valueColor: AppColors.primary,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildItemSearchField() {
+  Widget _infoCell(IconData icon, String label, String value,
+      {Color? valueColor}) {
     return Container(
-      height: 50,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFFEDEDED),
-        borderRadius: BorderRadius.circular(12),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
       ),
-      child: TextField(
-        controller: _itemSearchController,
-        style: GoogleFonts.cairo(fontSize: 14),
-        decoration: InputDecoration(
-          hintText: 'ابحث في أصناف الفاتورة...',
-          hintStyle: GoogleFonts.cairo(color: Colors.grey, fontSize: 13),
-          prefixIcon: const Icon(Icons.search, color: Colors.grey, size: 20),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(
-            vertical: 12,
-            horizontal: 16,
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: AppColors.primary),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label,
+                    style: GoogleFonts.cairo(
+                        fontSize: 10, color: Colors.grey.shade500)),
+                Text(value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.cairo(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: valueColor ?? AppColors.textDark)),
+              ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
+
+  Widget _buildItemSearchField() => Container(
+        height: 50,
+        decoration: BoxDecoration(
+            color: const Color(0xFFEDEDED),
+            borderRadius: BorderRadius.circular(12)),
+        child: TextField(
+          controller: _itemSearchController,
+          style: GoogleFonts.cairo(fontSize: 14),
+          decoration: InputDecoration(
+            hintText: 'ابحث في أصناف الفاتورة...',
+            hintStyle: GoogleFonts.cairo(color: Colors.grey, fontSize: 13),
+            prefixIcon:
+                const Icon(Icons.search, color: Colors.grey, size: 20),
+            border: InputBorder.none,
+            contentPadding:
+                const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          ),
+        ),
+      );
 
   Widget _buildItemsList() {
     if (_filteredInvoiceItems.isEmpty && _itemSearchQuery.isNotEmpty) {
       return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Text(
-            'لا توجد نتائج بحث',
-            style: GoogleFonts.cairo(color: AppColors.textLight),
-          ),
-        ),
-      );
+          child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Text('لا توجد نتائج بحث',
+                  style:
+                      GoogleFonts.cairo(color: AppColors.textLight))));
     }
-
     return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: _filteredInvoiceItems.length,
-      itemBuilder: (context, index) {
-        final item = _filteredInvoiceItems[index];
-        return _buildItemCard(item);
-      },
+      itemBuilder: (_, i) => _buildItemCard(_filteredInvoiceItems[i]),
     );
   }
 
   Widget _buildItemCard(Map<String, dynamic> item) {
-    final soldQty = int.tryParse(item['qty']?.toString() ?? '0') ?? 0;
+    final soldQty = (item['qty'] as num?)?.toInt() ?? 0;
     final returnQty = int.tryParse(item['controller'].text) ?? 0;
+    final unitPrice = _unitFinalValue(item);
+    final returnAmount = unitPrice * returnQty;
+    final side = item['itemSide']?.toString();
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      height: 95,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+    return GestureDetector(
+      onTap: () => _updateItemQty(item, soldQty),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: returnQty > 0
+                ? Colors.orange.shade300
+                : Colors.transparent,
+            width: 1.5,
           ),
-        ],
-      ),
-      child: Row(
-        children: [
-          // Name and Code (Right side)
-          Expanded(
-            flex: 4,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withOpacity(0.03),
+                blurRadius: 10,
+                offset: const Offset(0, 4))
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Row 1: name + side badge ──
+              Row(
                 children: [
-                  Text(
-                    item['nameAr'] ?? 'صنف بدون اسم',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.cairo(
-                      color: AppColors.textDark,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Text(
-                        '#${item['itemCode'] ?? '---'}',
-                        style: GoogleFonts.cairo(
-                          color: Colors.grey,
-                          fontSize: 11,
-                        ),
-                      ),
-                      if (item['itemSide'] != null) ...[
-                        const SizedBox(width: 10),
-                        Text(
-                          item['itemSide'].toString(),
-                          style: GoogleFonts.cairo(
-                            color:
-                                item['itemSide'].toString().toUpperCase() == 'L'
-                                ? Colors.red
-                                : Colors.blue,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          const VerticalDivider(width: 1, indent: 20, endIndent: 20),
-
-          // Sold Qty Info
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  'المباع',
-                  style: GoogleFonts.cairo(fontSize: 10, color: Colors.grey),
-                ),
-                Text(
-                  '$soldQty',
-                  style: GoogleFonts.cairo(
-                    color: AppColors.textDark,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          const VerticalDivider(width: 1, indent: 15, endIndent: 15),
-
-          // Return Qty Input
-          InkWell(
-            onTap: () => _updateItemQty(item, soldQty),
-            child: Container(
-              width: 55,
-              margin: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: returnQty > 0
-                    ? Colors.orange.shade100
-                    : Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: returnQty > 0
-                      ? Colors.orange.shade300
-                      : Colors.transparent,
-                ),
-              ),
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      'المرتجع',
-                      style: GoogleFonts.cairo(fontSize: 9, color: Colors.grey),
-                    ),
-                    Text(
-                      item['controller'].text,
+                  Expanded(
+                    child: Text(
+                      item['nameAr'] ?? 'صنف بدون اسم',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.cairo(
-                        color: returnQty > 0
-                            ? Colors.orange.shade700
-                            : AppColors.textDark,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                          color: AppColors.textDark),
+                    ),
+                  ),
+                  if (side != null) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: side.toUpperCase() == 'L'
+                            ? Colors.red.shade50
+                            : Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        side,
+                        style: GoogleFonts.cairo(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                          color: side.toUpperCase() == 'L'
+                              ? Colors.red
+                              : Colors.blue,
+                        ),
                       ),
                     ),
                   ],
-                ),
+                ],
               ),
-            ),
+              const SizedBox(height: 4),
+              // ── Row 2: code + unit price ──
+              Row(
+                children: [
+                  Text('#${item['itemCode'] ?? '---'}',
+                      style: GoogleFonts.cairo(
+                          fontSize: 11, color: Colors.grey)),
+                  const SizedBox(width: 12),
+                  Text(
+                    'سعر الوحدة: ${unitPrice.toStringAsFixed(2)} ج.م',
+                    style: GoogleFonts.cairo(
+                        fontSize: 11, color: Colors.grey.shade600),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              // ── Row 3: qty chips + return amount ──
+              Row(
+                children: [
+                  _qtyChip('المباع', '$soldQty', Colors.blue.shade50,
+                      Colors.blue.shade700),
+                  const SizedBox(width: 8),
+                  _qtyChip(
+                    'المرتجع',
+                    '$returnQty',
+                    returnQty > 0
+                        ? Colors.orange.shade50
+                        : Colors.grey.shade100,
+                    returnQty > 0
+                        ? Colors.orange.shade700
+                        : Colors.grey.shade600,
+                  ),
+                  const Spacer(),
+                  if (returnQty > 0)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '${returnAmount.toStringAsFixed(2)} ج.م',
+                        style: GoogleFonts.cairo(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.orange.shade800),
+                      ),
+                    ),
+                ],
+              ),
+            ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _qtyChip(
+      String label, String value, Color bg, Color textColor) {
+    return Container(
+      padding:
+          const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration:
+          BoxDecoration(color: bg, borderRadius: BorderRadius.circular(8)),
+      child: Column(
+        children: [
+          Text(label,
+              style:
+                  GoogleFonts.cairo(fontSize: 9, color: Colors.grey)),
+          Text(value,
+              style: GoogleFonts.cairo(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: textColor)),
         ],
       ),
     );
   }
 
   void _updateItemQty(Map<String, dynamic> item, int soldQty) {
-    int currentReturnQty = int.tryParse(item['controller'].text) ?? 0;
+    int currentQty = int.tryParse(item['controller'].text) ?? 0;
 
     showDialog(
       context: context,
@@ -1155,107 +912,85 @@ class _ReturnsScreenState extends State<ReturnsScreen> {
         textDirection: TextDirection.rtl,
         child: AlertDialog(
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(15),
-          ),
-          title: Text(
-            'تعديل الكمية المرتجعة',
-            style: GoogleFonts.cairo(fontWeight: FontWeight.bold, fontSize: 18),
-            textAlign: TextAlign.center,
-          ),
+              borderRadius: BorderRadius.circular(15)),
+          title: Text('تعديل الكمية المرتجعة',
+              style: GoogleFonts.cairo(
+                  fontWeight: FontWeight.bold, fontSize: 18),
+              textAlign: TextAlign.center),
           content: StatefulBuilder(
-            builder: (context, setDialogState) {
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    item['nameAr'] ?? '',
+            builder: (context, setDialogState) => Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(item['nameAr'] ?? '',
                     style: GoogleFonts.cairo(fontSize: 13),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    'الكمية المباعة: $soldQty',
-                    style: GoogleFonts.cairo(color: Colors.grey, fontSize: 13),
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      InkWell(
-                        onTap: () {
-                          if (currentReturnQty > 0) {
-                            setDialogState(() => currentReturnQty--);
-                          }
-                        },
-                        child: const Icon(
-                          Icons.remove_circle_outline,
-                          color: Colors.red,
-                          size: 40,
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 25),
-                        child: Text(
-                          '$currentReturnQty',
+                    textAlign: TextAlign.center),
+                const SizedBox(height: 6),
+                Text('الكمية المباعة: $soldQty',
+                    style: GoogleFonts.cairo(
+                        color: Colors.grey, fontSize: 13)),
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    InkWell(
+                      onTap: () {
+                        if (currentQty > 0) {
+                          setDialogState(() => currentQty--);
+                        }
+                      },
+                      child: const Icon(Icons.remove_circle_outline,
+                          color: Colors.red, size: 40),
+                    ),
+                    Padding(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 25),
+                      child: Text('$currentQty',
                           style: GoogleFonts.cairo(
-                            fontSize: 28,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.primary,
-                          ),
-                        ),
-                      ),
-                      InkWell(
-                        onTap: () {
-                          if (currentReturnQty < soldQty) {
-                            setDialogState(() => currentReturnQty++);
-                          } else {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'الكمية المرتجعة لا يمكن أن تتجاوز المباعة',
-                                ),
-                                duration: Duration(seconds: 1),
-                              ),
-                            );
-                          }
-                        },
-                        child: const Icon(
-                          Icons.add_circle_outline,
-                          color: Colors.green,
-                          size: 40,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              );
-            },
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.primary)),
+                    ),
+                    InkWell(
+                      onTap: () {
+                        if (currentQty < soldQty) {
+                          setDialogState(() => currentQty++);
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                  'الكمية لا يمكن أن تتجاوز المباعة'),
+                              duration: Duration(seconds: 1),
+                            ),
+                          );
+                        }
+                      },
+                      child: const Icon(Icons.add_circle_outline,
+                          color: Colors.green, size: 40),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: Text(
-                'إلغاء',
-                style: GoogleFonts.cairo(color: Colors.grey),
-              ),
+              child: Text('إلغاء',
+                  style: GoogleFonts.cairo(color: Colors.grey)),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
+                    borderRadius: BorderRadius.circular(10)),
               ),
               onPressed: () {
-                setState(() {
-                  item['controller'].text = currentReturnQty.toString();
-                });
+                setState(
+                    () => item['controller'].text = currentQty.toString());
                 Navigator.pop(context);
               },
-              child: Text(
-                'تأكيد',
-                style: GoogleFonts.cairo(color: Colors.white),
-              ),
+              child: Text('تأكيد',
+                  style: GoogleFonts.cairo(color: Colors.white)),
             ),
           ],
         ),
@@ -1269,48 +1004,101 @@ class _ReturnsScreenState extends State<ReturnsScreen> {
         .length;
 
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, -5),
-          ),
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, -5))
         ],
       ),
       child: SafeArea(
-        child: Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+            // ── financial summary ──
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Column(
+                children: [
+                  _summaryRow('إجمالي المباع',
+                      '${_invoiceTotal.toStringAsFixed(2)} ج.م',
+                      Colors.blue.shade700),
+                  const Divider(height: 10),
+                  _summaryRow('إجمالي المرتجع',
+                      '- ${_returnTotal.toStringAsFixed(2)} ج.م',
+                      Colors.orange.shade700),
+                  const Divider(height: 10),
+                  _summaryRow(
+                    'المبلغ المتبقي',
+                    '${_remainingTotal.toStringAsFixed(2)} ج.م',
+                    _remainingTotal < 0
+                        ? AppColors.error
+                        : Colors.green.shade700,
+                    bold: true,
+                  ),
+                ],
+              ),
+            ),
+            // ── submit row ──
+            Row(
               children: [
-                Text(
-                  'أصناف مرتجعة',
-                  style: GoogleFonts.cairo(fontSize: 12, color: Colors.grey),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('أصناف مرتجعة',
+                        style: GoogleFonts.cairo(
+                            fontSize: 12, color: Colors.grey)),
+                    Text('$activeReturns صنف',
+                        style: GoogleFonts.cairo(
+                            fontSize: 16, fontWeight: FontWeight.bold)),
+                  ],
                 ),
-                Text(
-                  '$activeReturns صنف',
-                  style: GoogleFonts.cairo(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
+                const SizedBox(width: 20),
+                Expanded(
+                  child: CustomButton(
+                    text: 'عمل المرتجع',
+                    isLoading: _isLoading,
+                    onPressed: _showConfirmBottomSheet,
                   ),
                 ),
               ],
             ),
-            const SizedBox(width: 20),
-            Expanded(
-              child: CustomButton(
-                text: 'إرسال المرتجع',
-                isLoading: _isLoading,
-                onPressed: _submitReturn,
-              ),
-            ),
+            const SizedBox(height: 4),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _summaryRow(String label, String value, Color valueColor,
+      {bool bold = false}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label,
+            style: GoogleFonts.cairo(
+                fontSize: 13,
+                color: Colors.grey.shade700,
+                fontWeight:
+                    bold ? FontWeight.bold : FontWeight.normal)),
+        Text(value,
+            style: GoogleFonts.cairo(
+                fontSize: 13,
+                fontWeight:
+                    bold ? FontWeight.bold : FontWeight.w600,
+                color: valueColor)),
+      ],
     );
   }
 }

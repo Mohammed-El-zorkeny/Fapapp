@@ -8,7 +8,6 @@ import '../services/storage_service.dart';
 import '../widgets/custom_button.dart';
 import 'home_screen.dart';
 import 'salesman_dashboard_screen.dart';
-import 'salesman_dashboard_screen.dart';
 import 'manstock_dashboard_screen.dart';
 import 'admin_dashboard_screen.dart';
 import '../services/notification_service.dart';
@@ -194,7 +193,13 @@ class _OtpScreenState extends State<OtpScreen> {
               ),
 
               Expanded(
-                child: Padding(
+                child: LayoutBuilder(
+                  builder: (context, constraints) => SingleChildScrollView(
+                    physics: const ClampingScrollPhysics(),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                      child: IntrinsicHeight(
+                        child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -447,6 +452,10 @@ class _OtpScreenState extends State<OtpScreen> {
                         ],
                       ),
                     ],
+                  ),
+                ),
+                      ),
+                    ),
                   ),
                 ),
               ),
