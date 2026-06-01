@@ -75,12 +75,19 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   }
 
   Future<void> _checkSessionValidity() async {
-    final token = await StorageService().getToken();
+    final storage = StorageService();
+    final token = await storage.getToken();
     if (token == null) {
-      NotificationService.navigatorKey.currentState?.pushAndRemoveUntil(
-        MaterialPageRoute(builder: (context) => const LoginScreen()),
-        (route) => false,
-      );
+      // Only force-logout if the user had a prior session (userData exists).
+      // If userData is also null the user is still in the login/OTP flow and
+      // has no token yet — redirecting here would kick them out mid-auth.
+      final userData = await storage.getUserData();
+      if (userData != null) {
+        NotificationService.navigatorKey.currentState?.pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+          (route) => false,
+        );
+      }
     }
   }
 
