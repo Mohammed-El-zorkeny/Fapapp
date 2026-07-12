@@ -10,6 +10,7 @@ import '../utils/app_colors.dart';
 import '../utils/font_size_provider.dart';
 import '../services/storage_service.dart';
 import '../services/api_service.dart';
+import '../utils/user_session.dart';
 import 'login_screen.dart';
 
 class UserProfileScreen extends StatefulWidget {
@@ -129,8 +130,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       _buildContactSection(),
                       const SizedBox(height: 16),
                       _buildAppSettings(),
-                      const SizedBox(height: 16),
-                      _buildLocationSection(),
+                      if (!UserSession.instance.canStockCount) ...[
+                        const SizedBox(height: 16),
+                        _buildLocationSection(),
+                      ],
                       const SizedBox(height: 24),
                       _buildActionButtons(),
                     ],

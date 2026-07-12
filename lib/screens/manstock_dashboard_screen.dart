@@ -3,10 +3,16 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../utils/app_colors.dart';
 import '../services/storage_service.dart';
+import '../utils/user_session.dart';
 
 import 'login_screen.dart';
 import 'item_card_screen.dart';
 import 'location_edit_screen.dart';
+import 'purchase_deliveries_screen.dart';
+import 'stock_count_screen.dart';
+import 'user_profile_screen.dart';
+import 'notifications_screen.dart';
+import 'delivery_invoices_list_screen.dart';
 
 class ManstockDashboardScreen extends StatefulWidget {
   const ManstockDashboardScreen({super.key});
@@ -99,7 +105,7 @@ class _ManstockDashboardScreenState extends State<ManstockDashboardScreen> {
                     children: [
                       // Welcome Section
                       Text(
-                        'مرحباً، $_userName',
+                        'مرحباً بك 👋',
                         style: GoogleFonts.cairo(
                           fontSize: 28,
                           fontWeight: FontWeight.bold,
@@ -117,65 +123,207 @@ class _ManstockDashboardScreenState extends State<ManstockDashboardScreen> {
 
                       const SizedBox(height: 30),
 
-                      // Main Cards
-                      _buildMainCard(
-                        icon: Icons.inventory_2_rounded,
-                        title: 'فتح وردية جرد',
-                        subtitle: 'بدء وردية جرد جديدة للمخزن',
-                        gradient: LinearGradient(
-                          colors: [
-                            AppColors.primary,
-                            AppColors.primary.withOpacity(0.7),
-                          ],
-                        ),
-                        onTap: () {
-                          // TODO: Navigate to Inventory Shift Screen
-                        },
-                      ),
+                      // Main Cards (Rendered Dynamically Based on Permissions in 3 Columns)
+                      ...(() {
+                        final List<Widget> cards = [];
 
-                      const SizedBox(height: 16),
-
-                      _buildMainCard(
-                        icon: Icons.article_rounded,
-                        title: 'كارت صنف',
-                        subtitle: 'عرض وتعديل تفاصيل وحركة الأصناف',
-                        gradient: LinearGradient(
-                          colors: [
-                            AppColors.info,
-                            AppColors.info.withOpacity(0.7),
-                          ],
-                        ),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const ItemCardScreen(),
+                        // 1. Stock Count (الجرد)
+                        if (UserSession.instance.canStockCount) {
+                          cards.add(
+                            _buildSmallCard(
+                              icon: Icons.inventory_2_rounded,
+                              title: 'جرد الأصناف',
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        const StockCountScreen(),
+                                  ),
+                                );
+                              },
                             ),
                           );
-                        },
-                      ),
+                        }
 
-                      const SizedBox(height: 16),
-
-                      _buildMainCard(
-                        icon: Icons.edit_location_alt_rounded,
-                        title: 'تعديل موقع',
-                        subtitle: 'تعديل وتحديد مواقع الأصناف في المخزن',
-                        gradient: LinearGradient(
-                          colors: [
-                            const Color(0xFF4CAF50),
-                            const Color(0xFF4CAF50).withOpacity(0.7),
-                          ],
-                        ),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const LocationEditScreen(),
+                        // 2. Item Card (كارت صنف)
+                        if (UserSession.instance.canViewItemCard) {
+                          cards.add(
+                            _buildSmallCard(
+                              icon: Icons.article_rounded,
+                              title: 'كارت صنف',
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        const ItemCardScreen(),
+                                  ),
+                                );
+                              },
                             ),
                           );
-                        },
-                      ),
+                        }
+
+                        // 3. Change Location (تعديل موقع)
+                        if (UserSession.instance.canChangeLocation) {
+                          cards.add(
+                            _buildSmallCard(
+                              icon: Icons.edit_location_alt_rounded,
+                              title: 'تعديل موقع',
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        const LocationEditScreen(),
+                                  ),
+                                );
+                              },
+                            ),
+                          );
+                        }
+
+                        // 4. Purchase Deliveries (استلام المشتريات)
+                        if (UserSession.instance.canPurchaseDelivery) {
+                          cards.add(
+                            _buildSmallCard(
+                              icon: Icons.local_shipping_rounded,
+                              title: 'استلام المشتريات',
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        const PurchaseDeliveriesScreen(),
+                                  ),
+                                );
+                              },
+                            ),
+                          );
+                        }
+
+                        // 5. Return Deliveries (استلام المرتجعات)
+                        if (UserSession.instance.canReturnDelivery) {
+                          cards.add(
+                            _buildSmallCard(
+                              icon: Icons.assignment_return_rounded,
+                              title: 'استلام المرتجعات',
+                              onTap: () {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'شاشة استلام المرتجعات قيد التطوير',
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          );
+                        }
+
+                        // 6. Review Delivery Invoices (مراجعة فواتير تسليم)
+                        if (UserSession.instance.canReviewDeliveryInvoices) {
+                          cards.add(
+                            _buildSmallCard(
+                              icon: Icons.rate_review_rounded,
+                              title: 'مراجعة الفواتير',
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        const DeliveryInvoicesListScreen(),
+                                  ),
+                                );
+                              },
+                            ),
+                          );
+                        }
+
+                        // 7. My Account (حسابي)
+                        cards.add(
+                          _buildSmallCard(
+                            icon: Icons.person_outline,
+                            title: 'حسابي',
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      const UserProfileScreen(),
+                                ),
+                              );
+                            },
+                          ),
+                        );
+
+                        // 8. Logout (تسجيل الخروج)
+                        cards.add(
+                          _buildSmallCard(
+                            icon: Icons.logout_rounded,
+                            title: 'تسجيل الخروج',
+                            onTap: _logout,
+                          ),
+                        );
+
+                        // If no screens are authorized
+                        if (cards.isEmpty) {
+                          return [
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(24),
+                              decoration: BoxDecoration(
+                                color: Colors.amber.shade50,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: Colors.amber.shade300,
+                                ),
+                              ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.warning_amber_rounded,
+                                    size: 64,
+                                    color: Colors.amber.shade800,
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    'لا توجد صلاحيات نشطة',
+                                    style: GoogleFonts.cairo(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.amber.shade900,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'لا تملك صلاحية الوصول لأي من شاشات المخازن حالياً. يرجى مراجعة مدير النظام.',
+                                    textAlign: TextAlign.center,
+                                    style: GoogleFonts.cairo(
+                                      fontSize: 14,
+                                      color: Colors.amber.shade800,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ];
+                        }
+
+                        return [
+                          GridView.count(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            crossAxisCount: 3,
+                            crossAxisSpacing: 12,
+                            mainAxisSpacing: 12,
+                            childAspectRatio: 0.95,
+                            children: cards,
+                          ),
+                        ];
+                      })(),
                     ],
                   ),
                 ),
@@ -220,25 +368,35 @@ class _ManstockDashboardScreenState extends State<ManstockDashboardScreen> {
 
           // User Name
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _userName,
-                  style: GoogleFonts.cairo(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textDark,
+            child: GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const UserProfileScreen(),
                   ),
-                ),
-                Text(
-                  'مسؤول مخزن',
-                  style: GoogleFonts.cairo(
-                    fontSize: 12,
-                    color: AppColors.textLight,
+                );
+              },
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _userName,
+                    style: GoogleFonts.cairo(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textDark,
+                    ),
                   ),
-                ),
-              ],
+                  Text(
+                    'مسؤول مخزن',
+                    style: GoogleFonts.cairo(
+                      fontSize: 12,
+                      color: AppColors.textLight,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
 
@@ -252,7 +410,12 @@ class _ManstockDashboardScreenState extends State<ManstockDashboardScreen> {
                   size: 26,
                 ),
                 onPressed: () {
-                  // Navigate to notifications
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const NotificationsScreen(),
+                    ),
+                  );
                 },
               ),
               if (_notificationCount > 0)
@@ -299,77 +462,63 @@ class _ManstockDashboardScreenState extends State<ManstockDashboardScreen> {
     );
   }
 
-  Widget _buildMainCard({
+  Widget _buildSmallCard({
     required IconData icon,
     required String title,
-    required String subtitle,
-    required Gradient gradient,
     required VoidCallback onTap,
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          gradient: gradient,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.shadowLight,
-              blurRadius: 20,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            // Icon
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Icon(icon, color: Colors.white, size: 40),
-            ),
-
-            const SizedBox(width: 20),
-
-            // Text
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: GoogleFonts.cairo(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      child:
+          Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: GoogleFonts.cairo(
-                      fontSize: 14,
-                      color: Colors.white.withOpacity(0.9),
+                  ],
+                  border: Border.all(color: Colors.grey.shade100),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: const BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(icon, color: Colors.white, size: 20),
                     ),
-                  ),
-                ],
-              ),
-            ),
-
-            // Arrow
-            Icon(
-              Icons.arrow_back_ios,
-              color: Colors.white.withOpacity(0.8),
-              size: 20,
-            ),
-          ],
-        ),
-      ).animate().fadeIn(duration: 400.ms).slideX(begin: 0.2, end: 0),
+                    const SizedBox(height: 10),
+                    Text(
+                      title,
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.cairo(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textDark,
+                        height: 1.2,
+                      ),
+                    ),
+                  ],
+                ),
+              )
+              .animate()
+              .fadeIn(duration: 250.ms)
+              .scale(begin: const Offset(0.95, 0.95), end: const Offset(1, 1)),
     );
   }
 }

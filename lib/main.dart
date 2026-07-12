@@ -1,6 +1,7 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:upgrader/upgrader.dart';
 
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -130,7 +131,16 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           ],
           supportedLocales: const [Locale('ar', 'EG'), Locale('en', 'US')],
           locale: const Locale('ar', 'EG'),
-          home: const SplashScreen(),
+          home: UpgradeAlert(
+            upgrader: Upgrader(
+              durationUntilAlertAgain: Duration.zero,
+            ),
+            barrierDismissible: false,
+            showIgnore: false,
+            showLater: false,
+            shouldPopScope: () => false,
+            child: const SplashScreen(),
+          ),
         );
       },
     );

@@ -315,6 +315,7 @@ class _LocationEditScreenState extends State<LocationEditScreen> {
                     Expanded(
                       child: TextField(
                         controller: _searchController,
+                        keyboardType: TextInputType.number,
                         decoration: InputDecoration(
                           hintText: 'أدخل كود الصنف واستعرض...',
                           hintStyle: GoogleFonts.cairo(

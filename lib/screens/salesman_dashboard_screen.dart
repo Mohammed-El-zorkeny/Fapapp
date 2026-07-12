@@ -8,7 +8,9 @@ import 'my_payments_screen.dart';
 import 'my_returns_screen.dart';
 import 'notifications_screen.dart';
 import 'login_screen.dart';
+import 'user_profile_screen.dart';
 import 'package:intl/intl.dart' as intl;
+import 'salesman_deliveries_screen.dart';
 
 class SalesmanDashboardScreen extends StatefulWidget {
   const SalesmanDashboardScreen({super.key});
@@ -72,16 +74,8 @@ class _SalesmanDashboardScreenState extends State<SalesmanDashboardScreen> {
         screen = const MyReturnsScreen();
         break;
       case 2:
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'خدمة التوصيل ستكون متاحة قريباً',
-              style: GoogleFonts.cairo(),
-            ),
-            backgroundColor: AppColors.primary,
-          ),
-        );
-        return;
+        screen = const SalesmanDeliveriesScreen();
+        break;
       case 3:
         screen = const NotificationsScreen();
         break;
@@ -246,8 +240,15 @@ class _SalesmanDashboardScreenState extends State<SalesmanDashboardScreen> {
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
       child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.all(3),
+          GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const UserProfileScreen()),
+              );
+            },
+            child: Container(
+              padding: const EdgeInsets.all(3),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: AppColors.primaryGradient,
@@ -260,6 +261,7 @@ class _SalesmanDashboardScreenState extends State<SalesmanDashboardScreen> {
                 backgroundColor: Colors.white,
                 child: CircleAvatar(radius: 20, backgroundImage: AssetImage('assets/images/avatar.jpg')),
               ),
+            ),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -541,6 +543,8 @@ class _SalesmanDashboardScreenState extends State<SalesmanDashboardScreen> {
               Navigator.push(context, MaterialPageRoute(builder: (c) => const MyReturnsScreen()));
             } else if (index == 3) {
               Navigator.push(context, MaterialPageRoute(builder: (c) => const NotificationsScreen()));
+            } else if (index == 4) {
+              Navigator.push(context, MaterialPageRoute(builder: (c) => const UserProfileScreen()));
             }
           },
           type: BottomNavigationBarType.fixed,
@@ -556,6 +560,7 @@ class _SalesmanDashboardScreenState extends State<SalesmanDashboardScreen> {
             _buildNavItem(Icons.account_balance_wallet_outlined, 'التحصيل', 1),
             _buildNavItem(Icons.assignment_return_outlined, 'المرتجعات', 2),
             _buildNavItem(Icons.notifications_none_rounded, 'الإشعارات', 3),
+            _buildNavItem(Icons.person_outline, 'حسابي', 4),
           ],
         ),
       ),

@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../utils/app_colors.dart';
 import '../services/api_service.dart';
 import 'collection_screen.dart';
+import 'notifications_screen.dart';
 
 class MyPaymentsScreen extends StatefulWidget {
   const MyPaymentsScreen({super.key});
@@ -88,6 +89,15 @@ class _MyPaymentsScreenState extends State<MyPaymentsScreen> {
                   fontWeight: FontWeight.bold,
                   fontSize: 22)),
           actions: [
+            IconButton(
+              icon: const Icon(Icons.notifications_none_rounded, color: AppColors.primary),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const NotificationsScreen()),
+                );
+              },
+            ),
             IconButton(
               icon:
                   const Icon(Icons.refresh_rounded, color: AppColors.primary),

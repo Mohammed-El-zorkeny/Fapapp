@@ -1351,4 +1351,458 @@ class ApiService {
       return {'success': false, 'message': 'خطأ في الاتصال'};
     }
   }
+
+  // GET Purchase Invoices List
+  Future<Map<String, dynamic>> getPurchaseInvoices({String? autoNumber}) async {
+    String query = '';
+    if (autoNumber != null && autoNumber.isNotEmpty) {
+      query = '?autoNumber=${Uri.encodeComponent(autoNumber)}';
+    }
+    final url = Uri.parse('$baseUrl/PurchaseInvoice/GetAllInvoice$query');
+    try {
+      final headers = await _authHeaders;
+      final response = await http.get(url, headers: headers);
+      final body = utf8.decode(response.bodyBytes);
+      if (response.statusCode == 200) {
+        final data = json.decode(body);
+        return {'success': true, 'data': data['invoices'] ?? [], 'total': data['total'] ?? 0};
+      } else {
+        final data = json.decode(body);
+        return {'success': false, 'message': data['messageAr'] ?? 'فشل في تحميل الفواتير'};
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'خطأ في الاتصال: $e'};
+    }
+  }
+
+  // POST Receive Purchase Item Delivery
+  Future<Map<String, dynamic>> receivePurchaseItem({
+    required int invoiceId,
+    required String itemCode,
+    required double qtyReceived,
+  }) async {
+    final url = Uri.parse('$baseUrl/PurchaseInvoice/DeliveryInvoice');
+    try {
+      final headers = await _authHeaders;
+      final response = await http.post(
+        url,
+        headers: headers,
+        body: json.encode({
+          'invoiceId': invoiceId,
+          'itemCode': itemCode,
+          'qtyReceived': qtyReceived,
+        }),
+      );
+      final body = utf8.decode(response.bodyBytes);
+      final data = json.decode(body);
+      if (response.statusCode == 200) {
+        return {'success': data['status'] == 'success', 'message': data['messageAr'] ?? 'تم الاستلام بنجاح'};
+      } else {
+        return {'success': false, 'message': data['messageAr'] ?? 'فشل في عملية الاستلام'};
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'خطأ في الاتصال: $e'};
+    }
+  }
+
+  // GET User's Deliveries List
+  Future<Map<String, dynamic>> getMyDeliveries({int? invoiceId}) async {
+    String query = '';
+    if (invoiceId != null) {
+      query = '?invoiceId=$invoiceId';
+    }
+    final url = Uri.parse('$baseUrl/PurchaseInvoice/GetAllItemsDelivery$query');
+    try {
+      final headers = await _authHeaders;
+      final response = await http.get(url, headers: headers);
+      final body = utf8.decode(response.bodyBytes);
+      if (response.statusCode == 200) {
+        final data = json.decode(body);
+        return {'success': true, 'data': data['deliveries'] ?? [], 'total': data['total'] ?? 0};
+      } else {
+        final data = json.decode(body);
+        return {'success': false, 'message': data['messageAr'] ?? 'فشل في تحميل البيانات'};
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'خطأ في الاتصال: $e'};
+    }
+  }
+
+  // POST Update Delivery Quantity
+  Future<Map<String, dynamic>> updateDeliveryQty({
+    required int deliveryId,
+    required double qtyReceived,
+  }) async {
+    final url = Uri.parse('$baseUrl/PurchaseInvoice/UpdateQtyDelivery');
+    try {
+      final headers = await _authHeaders;
+      final response = await http.post(
+        url,
+        headers: headers,
+        body: json.encode({
+          'deliveryId': deliveryId,
+          'qtyReceived': qtyReceived,
+        }),
+      );
+      final body = utf8.decode(response.bodyBytes);
+      final data = json.decode(body);
+      if (response.statusCode == 200) {
+        return {'success': data['status'] == 'success', 'message': data['messageAr'] ?? 'تم تعديل الكمية بنجاح'};
+      } else {
+        return {'success': false, 'message': data['messageAr'] ?? 'فشل في تعديل الكمية'};
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'خطأ في الاتصال: $e'};
+    }
+  }
+
+  // GET Active Stock Count Sessions
+  Future<Map<String, dynamic>> getActiveCountSessions() async {
+    final url = Uri.parse('$baseUrl/StockCount/GetActiveSessions');
+    try {
+      final headers = await _authHeaders;
+      final response = await http.get(url, headers: headers);
+      final body = utf8.decode(response.bodyBytes);
+      if (response.statusCode == 200) {
+        final data = json.decode(body);
+        return {'success': true, 'data': data['sessions'] ?? [], 'total': data['total'] ?? 0};
+      } else {
+        final data = json.decode(body);
+        return {'success': false, 'message': data['messageAr'] ?? 'فشل في جلب جلسات الجرد'};
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'خطأ في الاتصال: $e'};
+    }
+  }
+
+  // POST Save Count Detail
+  Future<Map<String, dynamic>> saveCountDetail({
+    required int masterId,
+    required String itemCode,
+    required double qtyCounted,
+    required String location,
+    String? notes,
+  }) async {
+    final url = Uri.parse('$baseUrl/StockCount/SaveCountDetail');
+    try {
+      final headers = await _authHeaders;
+      final response = await http.post(
+        url,
+        headers: headers,
+        body: json.encode({
+          'masterId': masterId,
+          'itemCode': itemCode,
+          'qtyCounted': qtyCounted,
+          'location': location,
+          'notes': notes ?? '',
+        }),
+      );
+      final body = utf8.decode(response.bodyBytes);
+      final data = json.decode(body);
+      if (response.statusCode == 200) {
+        return {'success': data['status'] == 'success', 'message': data['messageAr'] ?? 'تم تسجيل عملية الجرد بنجاح'};
+      } else {
+        return {'success': false, 'message': data['messageAr'] ?? 'فشل في تسجيل عملية الجرد'};
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'خطأ في الاتصال: $e'};
+    }
+  }
+
+  // GET Counted Items List in Current Session
+  Future<Map<String, dynamic>> getCountSessionDetails({required int masterId}) async {
+    final url = Uri.parse('$baseUrl/StockCount/GetSessionDetails?masterId=$masterId');
+    try {
+      final headers = await _authHeaders;
+      final response = await http.get(url, headers: headers);
+      final body = utf8.decode(response.bodyBytes);
+      if (response.statusCode == 200) {
+        final data = json.decode(body);
+        return {'success': true, 'data': data['details'] ?? [], 'total': data['total'] ?? 0};
+      } else {
+        final data = json.decode(body);
+        return {'success': false, 'message': data['messageAr'] ?? 'فشل في جلب تفاصيل الجرد'};
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'خطأ في الاتصال: $e'};
+    }
+  }
+
+  // POST Update Counted Item Quantity / Notes
+  Future<Map<String, dynamic>> updateCountQty({
+    required int detailId,
+    required double qtyCounted,
+    String? notes,
+  }) async {
+    final url = Uri.parse('$baseUrl/StockCount/UpdateCountQty');
+    try {
+      final headers = await _authHeaders;
+      final response = await http.post(
+        url,
+        headers: headers,
+        body: json.encode({
+          'detailId': detailId,
+          'qtyCounted': qtyCounted,
+          'notes': notes ?? '',
+        }),
+      );
+      final body = utf8.decode(response.bodyBytes);
+      final data = json.decode(body);
+      if (response.statusCode == 200) {
+        return {'success': data['status'] == 'success', 'message': data['messageAr'] ?? 'تم تعديل الكمية بنجاح'};
+      } else {
+        return {'success': false, 'message': data['messageAr'] ?? 'فشل في تعديل الكمية'};
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'خطأ في الاتصال: $e'};
+    }
+  }
+
+  // GET Delivery Men List
+  Future<Map<String, dynamic>> getDeliveryMen() async {
+    final url = Uri.parse('$baseUrl/DeliveryReview/GetDeliveryMen');
+    try {
+      final headers = await _authHeaders;
+      final response = await http.get(url, headers: headers);
+      final body = utf8.decode(response.bodyBytes);
+      final data = json.decode(body);
+      if (response.statusCode == 200) {
+        return {'success': data['status'] == 'success', 'data': data['deliveryMen'] ?? []};
+      } else {
+        return {'success': false, 'message': data['messageAr'] ?? 'فشل في تحميل قائمة المناديب'};
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'خطأ في الاتصال: $e'};
+    }
+  }
+
+  // GET Delivery Invoices By Date
+  Future<Map<String, dynamic>> getInvoicesByDate({String? deliveryDate}) async {
+    String query = '';
+    if (deliveryDate != null && deliveryDate.isNotEmpty) {
+      query = '?deliveryDate=${Uri.encodeComponent(deliveryDate)}';
+    }
+    final url = Uri.parse('$baseUrl/DeliveryReview/GetInvoicesByDate$query');
+    try {
+      final headers = await _authHeaders;
+      final response = await http.get(url, headers: headers);
+      final body = utf8.decode(response.bodyBytes);
+      final data = json.decode(body);
+      if (response.statusCode == 200) {
+        return {'success': data['status'] == 'success', 'data': data['invoices'] ?? []};
+      } else {
+        return {'success': false, 'message': data['messageAr'] ?? 'فشل في تحميل الفواتير'};
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'خطأ في الاتصال: $e'};
+    }
+  }
+
+  // GET Salesman Invoices By Date
+  Future<Map<String, dynamic>> getSalesmanInvoices({String? deliveryDate}) async {
+    String query = '';
+    if (deliveryDate != null && deliveryDate.isNotEmpty) {
+      query = '?deliveryDate=${Uri.encodeComponent(deliveryDate)}';
+    }
+    final url = Uri.parse('$baseUrl/DeliveryReview/GetSalesmanInvoices$query');
+    try {
+      final headers = await _authHeaders;
+      final response = await http.get(url, headers: headers);
+      final body = utf8.decode(response.bodyBytes);
+      final data = json.decode(body);
+      if (response.statusCode == 200) {
+        return {'success': data['status'] == 'success', 'data': data['invoices'] ?? []};
+      } else {
+        return {'success': false, 'message': data['messageAr'] ?? 'فشل في تحميل فواتير المندوب'};
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'خطأ في الاتصال: $e'};
+    }
+  }
+
+  // POST Start Delivery Journey
+  Future<Map<String, dynamic>> startDeliveryJourney({
+    required int invoiceId,
+    required double latitude,
+    required double longitude,
+  }) async {
+    final url = Uri.parse('$baseUrl/DeliveryReview/StartDeliveryJourney');
+    try {
+      final headers = await _authHeaders;
+      final response = await http.post(
+        url,
+        headers: headers,
+        body: json.encode({
+          'invoiceId': invoiceId,
+          'latitude': latitude,
+          'longitude': longitude,
+        }),
+      );
+      final body = utf8.decode(response.bodyBytes);
+      final data = json.decode(body);
+      if (response.statusCode == 200) {
+        return {'success': data['status'] == 'success', 'message': data['messageAr'] ?? 'تم بدء الرحلة بنجاح'};
+      } else {
+        return {'success': false, 'message': data['messageAr'] ?? 'فشل بدء الرحلة'};
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'خطأ في الاتصال: $e'};
+    }
+  }
+
+  // POST Add Tracking Point (Breadcrumbs with battery telemetry)
+  Future<Map<String, dynamic>> addTrackingPoint({
+    required int invoiceId,
+    required double latitude,
+    required double longitude,
+    double? bearing,
+    required int batteryLevel,
+    required bool isCharging,
+  }) async {
+    final url = Uri.parse('$baseUrl/DeliveryReview/AddTrackingPoint');
+    try {
+      final headers = await _authHeaders;
+      final response = await http.post(
+        url,
+        headers: headers,
+        body: json.encode({
+          'invoiceId': invoiceId,
+          'latitude': latitude,
+          'longitude': longitude,
+          'bearing': bearing ?? 0.0,
+          'batteryLevel': batteryLevel,
+          'isCharging': isCharging ? 'Y' : 'N',
+        }),
+      );
+      final body = utf8.decode(response.bodyBytes);
+      final data = json.decode(body);
+      if (response.statusCode == 200) {
+        return {'success': data['status'] == 'success', 'message': data['messageAr'] ?? 'تم تسجيل النقطة'};
+      } else {
+        return {'success': false, 'message': data['messageAr'] ?? 'فشل تسجيل النقطة'};
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'خطأ في الاتصال: $e'};
+    }
+  }
+
+  // POST End Delivery Journey
+  Future<Map<String, dynamic>> endDeliveryJourney({
+    required int invoiceId,
+    required double latitude,
+    required double longitude,
+    required double totalKm,
+    required double totalMinutes,
+    required String deliveryStatus,
+    String? notes,
+  }) async {
+    final url = Uri.parse('$baseUrl/DeliveryReview/EndDeliveryJourney');
+    try {
+      final headers = await _authHeaders;
+      final response = await http.post(
+        url,
+        headers: headers,
+        body: json.encode({
+          'invoiceId': invoiceId,
+          'latitude': latitude,
+          'longitude': longitude,
+          'totalKm': totalKm,
+          'totalMinutes': totalMinutes,
+          'deliveryStatus': deliveryStatus,
+          'notes': notes ?? '',
+        }),
+      );
+      final body = utf8.decode(response.bodyBytes);
+      final data = json.decode(body);
+      if (response.statusCode == 200) {
+        return {'success': data['status'] == 'success', 'message': data['messageAr'] ?? 'تم إنهاء الرحلة بنجاح'};
+      } else {
+        return {'success': false, 'message': data['messageAr'] ?? 'فشل إنهاء الرحلة'};
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'خطأ في الاتصال: $e'};
+    }
+  }
+
+  // GET Invoice Details for Review
+  Future<Map<String, dynamic>> getInvoiceDetails(int invoiceId) async {
+    final url = Uri.parse('$baseUrl/DeliveryReview/GetInvoiceDetails?invoiceId=$invoiceId');
+    try {
+      final headers = await _authHeaders;
+      final response = await http.get(url, headers: headers);
+      final body = utf8.decode(response.bodyBytes);
+      final data = json.decode(body);
+      if (response.statusCode == 200) {
+        return {'success': data['status'] == 'success', 'data': data['items'] ?? []};
+      } else {
+        return {'success': false, 'message': data['messageAr'] ?? 'فشل في تحميل تفاصيل الفاتورة'};
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'خطأ في الاتصال: $e'};
+    }
+  }
+
+  // POST Update Invoice Delivery Details
+  Future<Map<String, dynamic>> updateInvoiceDelivery({
+    required int invoiceId,
+    int? salesmanDeliveryId,
+    required String deliveryStatus,
+    String? deliveryNotes,
+  }) async {
+    final url = Uri.parse('$baseUrl/DeliveryReview/UpdateInvoiceDelivery');
+    try {
+      final headers = await _authHeaders;
+      final response = await http.post(
+        url,
+        headers: headers,
+        body: json.encode({
+          'invoiceId': invoiceId,
+          'salesmanDeliveryId': salesmanDeliveryId,
+          'deliveryStatus': deliveryStatus,
+          'deliveryNotes': deliveryNotes ?? '',
+        }),
+      );
+      final body = utf8.decode(response.bodyBytes);
+      final data = json.decode(body);
+      if (response.statusCode == 200) {
+        return {'success': data['status'] == 'success', 'message': data['messageAr'] ?? 'تم تحديث الفاتورة بنجاح'};
+      } else {
+        return {'success': false, 'message': data['messageAr'] ?? 'فشل في تحديث الفاتورة'};
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'خطأ في الاتصال: $e'};
+    }
+  }
+
+  // POST Update Item Review Status
+  Future<Map<String, dynamic>> updateItemReview({
+    required int invoiceId,
+    int? detailId,
+    required int isReviewed,
+    required bool reviewAll,
+  }) async {
+    final url = Uri.parse('$baseUrl/DeliveryReview/UpdateItemReview');
+    try {
+      final headers = await _authHeaders;
+      final response = await http.post(
+        url,
+        headers: headers,
+        body: json.encode({
+          'invoiceId': invoiceId,
+          'detailId': detailId,
+          'isReviewed': isReviewed,
+          'reviewAll': reviewAll.toString(),
+        }),
+      );
+      final body = utf8.decode(response.bodyBytes);
+      final data = json.decode(body);
+      if (response.statusCode == 200) {
+        return {'success': data['status'] == 'success', 'message': data['messageAr'] ?? 'تم التحديث بنجاح'};
+      } else {
+        return {'success': false, 'message': data['messageAr'] ?? 'فشل في تحديث حالة المراجعة'};
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'خطأ في الاتصال: $e'};
+    }
+  }
 }

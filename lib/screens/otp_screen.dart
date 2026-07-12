@@ -78,6 +78,14 @@ class _OtpScreenState extends State<OtpScreen> {
         'balance': responseData['balance'],
         'address': responseData['address'],
         'canViewPrices': responseData['canViewPrices'],
+        // Storekeeper Permissions
+        'canAccessStockApp': responseData['canAccessStockApp'],
+        'canPurchaseDelivery': responseData['canPurchaseDelivery'],
+        'canReturnDelivery': responseData['canReturnDelivery'],
+        'canStockCount': responseData['canStockCount'],
+        'canViewItemCard': responseData['canViewItemCard'],
+        'canChangeLocation': responseData['canChangeLocation'],
+        'canReviewDeliveryInvoices': responseData['canReviewDeliveryInvoices'],
       });
 
       await UserSession.instance.load();
