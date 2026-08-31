@@ -302,7 +302,8 @@ class _DeliveryInvoicesListScreenState extends State<DeliveryInvoicesListScreen>
                                         Navigator.push(
                                           context,
                                           MaterialPageRoute(
-                                            builder: (context) => DeliveryInvoiceDetailScreen(invoice: inv),
+                                            builder: (context) => DeliveryInvoiceDetailScreen(invoice: Map<String, dynamic>.from(inv)),
+
                                           ),
                                         ).then((value) {
                                           _fetchInvoices();

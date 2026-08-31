@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import '../utils/app_colors.dart';
 import '../services/api_service.dart';
 
 class DeliveryInvoiceDetailScreen extends StatefulWidget {
-  final Map<String, dynamic> invoice;
+  final Map<dynamic, dynamic> invoice;
   const DeliveryInvoiceDetailScreen({super.key, required this.invoice});
 
   @override
@@ -14,65 +15,47 @@ class DeliveryInvoiceDetailScreen extends StatefulWidget {
 
 class _DeliveryInvoiceDetailScreenState extends State<DeliveryInvoiceDetailScreen> {
   final ApiService _apiService = ApiService();
-  final TextEditingController _notesController = TextEditingController();
+  final TextEditingController _searchController = TextEditingController();
 
-  bool _isLoadingDropdowns = false;
   bool _isLoadingItems = false;
-  bool _isSavingGeneral = false;
-  bool _isSavingItemReview = false;
+  bool _isScanning = false;
 
-  List<dynamic> _deliveryMen = [];
-  List<dynamic> _items = [];
-  int? _selectedSalesmanId;
-  String _selectedStatus = 'PENDING_ASSIGNMENT';
+  List<Map<String, dynamic>> _items = [];
+  String _searchQuery = '';
 
-  final List<Map<String, String>> _statusOptions = [
-    {'code': 'PENDING_ASSIGNMENT', 'name': 'في انتظار التخصيص للمندوب'},
-    {'code': 'ASSIGNED', 'name': 'تم تسليمها للمندوب'},
-    {'code': 'OUT_FOR_DELIVERY', 'name': 'خرجت للتوصيل'},
-    {'code': 'DELIVERED_FULL', 'name': 'تم التسليم بالكامل'},
-    {'code': 'DELIVERED_PARTIAL', 'name': 'تسليم جزئي بمرتجع'},
-    {'code': 'REJECTED', 'name': 'تم رفض الاستلام'},
-    {'code': 'RETURNED', 'name': 'مرتجعة للمستودع'},
-  ];
+  late Map<String, dynamic> _invoiceData;
 
   @override
   void initState() {
     super.initState();
-    _selectedSalesmanId = widget.invoice['salesmanDeliveryId'];
-    _selectedStatus = widget.invoice['deliveryStatus'] ?? 'PENDING_ASSIGNMENT';
-    _notesController.text = widget.invoice['deliveryNotes'] ?? '';
-    _fetchDeliveryMen();
+    _invoiceData = Map<String, dynamic>.from(widget.invoice);
     _fetchItems();
   }
 
   @override
   void dispose() {
-    _notesController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
-  Future<void> _fetchDeliveryMen() async {
-    setState(() => _isLoadingDropdowns = true);
-    final response = await _apiService.getDeliveryMen();
-    if (mounted) {
-      setState(() {
-        _isLoadingDropdowns = false;
-        if (response['success']) {
-          _deliveryMen = response['data'] ?? [];
-        }
-      });
-    }
-  }
-
+  // Fetch items directly from /DeliveryReview/GetInvoiceDetails
   Future<void> _fetchItems() async {
     setState(() => _isLoadingItems = true);
-    final response = await _apiService.getInvoiceDetails(widget.invoice['id']);
+    final int invoiceId = int.tryParse(_invoiceData['id']?.toString() ?? '0') ?? 0;
+    final response = await _apiService.getInvoiceDetails(invoiceId);
     if (mounted) {
       setState(() {
         _isLoadingItems = false;
         if (response['success']) {
-          _items = response['data'] ?? [];
+          final rawItems = response['data'] as List<dynamic>? ?? [];
+          _items = rawItems.map((item) {
+            final mapItem = Map<String, dynamic>.from(item as Map);
+            final double currentQtyCounted = double.tryParse(mapItem['qtyCounted']?.toString() ?? '0') ?? 0.0;
+            return {
+              ...mapItem,
+              'qtyCounted': currentQtyCounted,
+            };
+          }).toList();
         } else {
           _showSnackBar(response['message'] ?? 'فشل في تحميل أصناف الفاتورة', isError: true);
         }
@@ -80,99 +63,204 @@ class _DeliveryInvoiceDetailScreenState extends State<DeliveryInvoiceDetailScree
     }
   }
 
-  Future<void> _saveGeneralInfo() async {
-    setState(() => _isSavingGeneral = true);
-    final response = await _apiService.updateInvoiceDelivery(
-      invoiceId: widget.invoice['id'],
-      salesmanDeliveryId: _selectedSalesmanId,
-      deliveryStatus: _selectedStatus,
-      deliveryNotes: _notesController.text.trim(),
-    );
-
-    if (mounted) {
-      setState(() => _isSavingGeneral = false);
-      if (response['success']) {
-        _showSnackBar(response['message'] ?? 'تم حفظ البيانات بنجاح');
-      } else {
-        _showSnackBar(response['message'] ?? 'فشل في حفظ البيانات العامة', isError: true);
-      }
+  Future<void> _updateItemCount(Map<String, dynamic> item, double newQty) async {
+    if (newQty < 0) return;
+    
+    final int detailId = int.tryParse((item['detailId'] ?? item['id'] ?? 0).toString()) ?? 0;
+    final int invoiceId = int.tryParse(_invoiceData['id']?.toString() ?? '0') ?? 0;
+    
+    print('🔍 [_updateItemCount] Calling SaveItemCount for invoiceId: $invoiceId, detailId: $detailId, newQty: $newQty');
+    if (detailId == 0) {
+      print('⚠️ [_updateItemCount] Warning: detailId is 0!');
+      _showSnackBar('خطأ: معرّف بند الفاتورة غير معروف (detailId = 0)', isError: true);
+      return;
     }
-  }
 
-  Future<void> _toggleItemReview(dynamic item) async {
-    final int detailId = item['detailId'];
-    final int currentReviewStatus = item['isDeliveryReviewed'] ?? 0;
-    final int newReviewStatus = currentReviewStatus == 1 ? 0 : 1;
+    final double oldQtyCounted = double.tryParse(item['qtyCounted']?.toString() ?? '0') ?? 0.0;
 
-    setState(() => _isSavingItemReview = true);
-    final response = await _apiService.updateItemReview(
-      invoiceId: widget.invoice['id'],
+    // Optimistic local UI update
+    setState(() {
+      item['qtyCounted'] = newQty;
+    });
+
+    final response = await _apiService.saveInvoiceItemCount(
+      invoiceId: invoiceId,
       detailId: detailId,
-      isReviewed: newReviewStatus,
-      reviewAll: false,
+      qtyCounted: newQty,
     );
 
     if (mounted) {
-      setState(() => _isSavingItemReview = false);
-      if (response['success']) {
+      if (!response['success']) {
+        print('❌ [_updateItemCount Failed] Error message: ${response['message']}');
+        // Revert if API failed
         setState(() {
-          item['isDeliveryReviewed'] = newReviewStatus;
+          item['qtyCounted'] = oldQtyCounted;
         });
-        _showSnackBar(response['message'] ?? 'تم تحديث حالة المراجعة');
+        _showSnackBar(response['message'] ?? 'فشل حفظ الكمية', isError: true);
       } else {
-        _showSnackBar(response['message'] ?? 'فشل في تحديث حالة المراجعة', isError: true);
+        print('✅ [_updateItemCount Success] ${response['message']}');
+        _showSnackBar('تم حفظ الكمية بنجاح (${newQty.toStringAsFixed(newQty % 1 == 0 ? 0 : 2)})');
       }
     }
   }
 
-  Future<void> _reviewAllItems() async {
-    final confirm = await showDialog<bool>(
+  void _showEditQtyDialog(Map<String, dynamic> item) {
+    final double currentQtyCounted = double.tryParse(item['qtyCounted']?.toString() ?? '0') ?? 0.0;
+    final double origQty = double.tryParse((item['qty'] ?? item['qtyInvoice'] ?? 0).toString()) ?? 0.0;
+    final String locationDisplay = (item['locationName'] ?? item['itemSide'] ?? item['location'] ?? 'غير محدد').toString();
+    
+    final TextEditingController editQtyController = TextEditingController(
+      text: currentQtyCounted > 0 
+          ? currentQtyCounted.toStringAsFixed(currentQtyCounted % 1 == 0 ? 0 : 2)
+          : '',
+    );
+
+    showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(
-          'تأكيد مراجعة الكل',
-          style: GoogleFonts.cairo(fontWeight: FontWeight.bold),
-        ),
-        content: Text(
-          'هل أنت متأكد من تعليم جميع أصناف الفاتورة كمراجعة؟',
-          style: GoogleFonts.cairo(),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text('إلغاء', style: GoogleFonts.cairo(color: Colors.grey)),
+      builder: (context) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(
+            'إدخال الكمية',
+            style: GoogleFonts.cairo(fontWeight: FontWeight.bold, fontSize: 16),
           ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-            child: Text('تأكيد', style: GoogleFonts.cairo(color: Colors.white)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                (item['itemNameAr'] ?? item['itemName'] ?? '').toString(),
+                style: GoogleFonts.cairo(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textDark),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'الكود: ${item['itemCode'] ?? ''} | الموقع/الاتجاه: $locationDisplay',
+                style: GoogleFonts.cairo(fontSize: 12, color: AppColors.textLight),
+              ),
+              if (origQty > 0) ...[
+                const SizedBox(height: 2),
+                Text(
+                  'كمية الفاتورة المطلوبة: ${origQty.toStringAsFixed(origQty % 1 == 0 ? 0 : 2)}',
+                  style: GoogleFonts.cairo(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.bold),
+                ),
+              ],
+              const SizedBox(height: 16),
+              TextField(
+                controller: editQtyController,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                autofocus: true,
+                style: GoogleFonts.cairo(fontSize: 20, fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+                decoration: InputDecoration(
+                  labelText: 'أدخل الكمية',
+                  hintText: '0',
+                  labelStyle: GoogleFonts.cairo(),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ],
           ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('إلغاء', style: GoogleFonts.cairo(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () {
+                final double? newQty = double.tryParse(editQtyController.text.trim());
+                if (newQty == null || newQty < 0) {
+                  _showSnackBar('الرجاء إدخال كمية صحيحة', isError: true);
+                  return;
+                }
+                Navigator.pop(context);
+                _updateItemCount(item, newQty);
+              },
+              child: Text('حفظ الكمية', style: GoogleFonts.cairo(color: Colors.white)),
+            ),
+          ],
+        ),
       ),
     );
+  }
 
-    if (confirm != true) return;
+  void _openBarcodeScanner() {
+    setState(() => _isScanning = true);
 
-    setState(() => _isSavingItemReview = true);
-    final response = await _apiService.updateItemReview(
-      invoiceId: widget.invoice['id'],
-      isReviewed: 1,
-      reviewAll: true,
-    );
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.65,
+        decoration: const BoxDecoration(
+          color: Colors.black,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(20),
+            topRight: Radius.circular(20),
+          ),
+        ),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              color: Colors.black87,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'مسح الباركود لإدخال الكمية',
+                    style: GoogleFonts.cairo(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: MobileScanner(
+                onDetect: (capture) {
+                  final List<Barcode> barcodes = capture.barcodes;
+                  for (final barcode in barcodes) {
+                    if (barcode.rawValue != null && barcode.rawValue!.isNotEmpty) {
+                      final String scannedCode = barcode.rawValue!.trim().toLowerCase();
+                      Navigator.pop(context);
+                      setState(() => _isScanning = false);
 
-    if (mounted) {
-      setState(() => _isSavingItemReview = false);
-      if (response['success']) {
-        setState(() {
-          for (var item in _items) {
-            item['isDeliveryReviewed'] = 1;
-          }
-        });
-        _showSnackBar(response['message'] ?? 'تمت مراجعة جميع الأصناف بنجاح');
-      } else {
-        _showSnackBar(response['message'] ?? 'فشل في مراجعة الكل', isError: true);
+                      // Match scanned code in items
+                      final itemMatch = _items.firstWhere(
+                        (it) => (it['itemCode'] ?? '').toString().toLowerCase() == scannedCode,
+                        orElse: () => {},
+                      );
+
+                      if (itemMatch.isNotEmpty) {
+                        _showEditQtyDialog(itemMatch);
+                      } else {
+                        _showSnackBar('الصنف الممسوح ($scannedCode) غير موجود بهذه الفاتورة', isError: true);
+                      }
+                      break;
+                    }
+                  }
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    ).then((_) {
+      if (_isScanning) {
+        setState(() => _isScanning = false);
       }
-    }
+    });
   }
 
   void _showSnackBar(String msg, {bool isError = false}) {
@@ -184,10 +272,20 @@ class _DeliveryInvoiceDetailScreenState extends State<DeliveryInvoiceDetailScree
     );
   }
 
+  List<Map<String, dynamic>> get _filteredItems {
+    if (_searchQuery.trim().isEmpty) return _items;
+    final query = _searchQuery.trim().toLowerCase();
+    return _items.where((item) {
+      final name = (item['itemNameAr'] ?? item['itemName'] ?? '').toString().toLowerCase();
+      final code = (item['itemCode'] ?? '').toString().toLowerCase();
+      return name.contains(query) || code.contains(query);
+    }).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final String autoNum = widget.invoice['autoNumber'] ?? '';
-    final String custName = widget.invoice['customerName'] ?? 'عميل غير معروف';
+    final String autoNum = (_invoiceData['autoNumber'] ?? '').toString();
+    final String custName = (_invoiceData['customerName'] ?? 'عميل غير معروف').toString();
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -196,7 +294,7 @@ class _DeliveryInvoiceDetailScreenState extends State<DeliveryInvoiceDetailScree
         elevation: 0.5,
         iconTheme: const IconThemeData(color: AppColors.textDark),
         title: Text(
-          'تفاصيل مراجعة الفاتورة',
+          'أصناف الفاتورة والعد',
           style: GoogleFonts.cairo(
             color: AppColors.textDark,
             fontWeight: FontWeight.bold,
@@ -206,379 +304,295 @@ class _DeliveryInvoiceDetailScreenState extends State<DeliveryInvoiceDetailScree
       body: SafeArea(
         child: Directionality(
           textDirection: TextDirection.rtl,
-          child: _isLoadingDropdowns && _deliveryMen.isEmpty
-              ? const Center(child: CircularProgressIndicator())
-              : SingleChildScrollView(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header Banner Card
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primary.withOpacity(0.15),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      // Invoice Header Card
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary,
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppColors.primary.withOpacity(0.2),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'فاتورة مبيعات: $autoNum',
-                              style: GoogleFonts.cairo(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 18,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              'العميل: $custName',
-                              style: GoogleFonts.cairo(
-                                color: Colors.white.withOpacity(0.9),
-                                fontSize: 14,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ).animate().fadeIn(duration: 200.ms).slideY(begin: -0.1, end: 0),
-
-                      const SizedBox(height: 20),
-
-                      // General Settings Form Card
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.02),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                          border: Border.all(color: Colors.grey.shade100),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'بيانات التسليم والمندوب',
-                              style: GoogleFonts.cairo(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 15,
-                                color: AppColors.textDark,
-                              ),
-                            ),
-                            const Divider(height: 20),
-
-                            // Salesman Dropdown
-                            Text(
-                              'مندوب التسليم المخصص',
-                              style: GoogleFonts.cairo(fontSize: 13, color: AppColors.textLight, fontWeight: FontWeight.bold),
-                            ),
-                            const SizedBox(height: 6),
-                            DropdownButtonFormField<int>(
-                              value: _selectedSalesmanId,
-                              style: GoogleFonts.cairo(color: AppColors.textDark, fontSize: 14),
-                              decoration: InputDecoration(
-                                hintText: 'اختر المندوب من القائمة...',
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                              ),
-                              items: _deliveryMen.map<DropdownMenuItem<int>>((man) {
-                                return DropdownMenuItem<int>(
-                                  value: man['id'],
-                                  child: Text(man['nameAr'] ?? ''),
-                                );
-                              }).toList(),
-                              onChanged: (val) {
-                                setState(() {
-                                  _selectedSalesmanId = val;
-                                });
-                              },
-                            ),
-
-                            const SizedBox(height: 16),
-
-                            // Delivery Status Dropdown
-                            Text(
-                              'حالة التسليم للفاتورة',
-                              style: GoogleFonts.cairo(fontSize: 13, color: AppColors.textLight, fontWeight: FontWeight.bold),
-                            ),
-                            const SizedBox(height: 6),
-                            DropdownButtonFormField<String>(
-                              value: _selectedStatus,
-                              style: GoogleFonts.cairo(color: AppColors.textDark, fontSize: 14),
-                              decoration: InputDecoration(
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                              ),
-                              items: _statusOptions.map<DropdownMenuItem<String>>((opt) {
-                                return DropdownMenuItem<String>(
-                                  value: opt['code'],
-                                  child: Text(opt['name'] ?? ''),
-                                );
-                              }).toList(),
-                              onChanged: (val) {
-                                if (val != null) {
-                                  setState(() {
-                                    _selectedStatus = val;
-                                  });
-                                }
-                              },
-                            ),
-
-                            const SizedBox(height: 16),
-
-                            // Notes Field
-                            Text(
-                              'ملاحظات التسليم',
-                              style: GoogleFonts.cairo(fontSize: 13, color: AppColors.textLight, fontWeight: FontWeight.bold),
-                            ),
-                            const SizedBox(height: 6),
-                            TextField(
-                              controller: _notesController,
-                              style: GoogleFonts.cairo(fontSize: 14),
-                              maxLines: 2,
-                              decoration: InputDecoration(
-                                hintText: 'اكتب أي ملاحظات تسليم هنا...',
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                              ),
-                            ),
-
-                            const SizedBox(height: 20),
-
-                            // Save Button
-                            SizedBox(
-                              width: double.infinity,
-                              height: 48,
-                              child: ElevatedButton(
-                                onPressed: _isSavingGeneral ? null : _saveGeneralInfo,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.primary,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                ),
-                                child: _isSavingGeneral
-                                    ? const SizedBox(
-                                        height: 20,
-                                        width: 20,
-                                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                                      )
-                                    : Text(
-                                        'حفظ البيانات العامة',
-                                        style: GoogleFonts.cairo(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 15,
-                                        ),
-                                      ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ).animate().fadeIn(duration: 250.ms),
-
-                      const SizedBox(height: 24),
-
-                      // Items Section Header
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'أصناف الفاتورة',
+                            'فاتورة مبيعات: $autoNum',
                             style: GoogleFonts.cairo(
+                              color: Colors.white,
                               fontWeight: FontWeight.bold,
-                              fontSize: 18,
-                              color: AppColors.textDark,
+                              fontSize: 16,
                             ),
                           ),
-                          TextButton.icon(
-                            onPressed: _isLoadingItems || _isSavingItemReview ? null : _reviewAllItems,
-                            icon: const Icon(Icons.done_all, color: AppColors.primary),
-                            label: Text(
-                              'مراجعة الكل',
-                              style: GoogleFonts.cairo(
-                                color: AppColors.primary,
-                                fontWeight: FontWeight.bold,
-                              ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'العميل: $custName',
+                            style: GoogleFonts.cairo(
+                              color: Colors.white.withOpacity(0.9),
+                              fontSize: 13,
                             ),
                           ),
                         ],
                       ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          '${_items.length} صنف',
+                          style: GoogleFonts.cairo(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ).animate().fadeIn(duration: 200.ms).slideY(begin: -0.05, end: 0),
 
-                      const SizedBox(height: 10),
+                const SizedBox(height: 16),
 
-                      // Items List Card
-                      _isLoadingItems
-                          ? const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator()))
-                          : Container(
+                // Search & Barcode Scan Bar
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _searchController,
+                        onChanged: (val) => setState(() => _searchQuery = val),
+                        style: GoogleFonts.cairo(fontSize: 14),
+                        decoration: InputDecoration(
+                          hintText: 'بحث باسم الصنف أو الباركود...',
+                          prefixIcon: const Icon(Icons.search, color: AppColors.textLight),
+                          suffixIcon: _searchQuery.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear, size: 18),
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    setState(() => _searchQuery = '');
+                                  },
+                                )
+                              : null,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          filled: true,
+                          fillColor: Colors.white,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton.filled(
+                      onPressed: _openBarcodeScanner,
+                      style: IconButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.all(12),
+                      ),
+                      icon: const Icon(Icons.qr_code_scanner, color: Colors.white),
+                      tooltip: 'مسح الباركود للعد',
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 14),
+
+                // Items Table List (الكود | الاتجاه / الموقع اسم الصنف | الكمية)
+                _isLoadingItems
+                    ? const Center(child: Padding(padding: EdgeInsets.all(30), child: CircularProgressIndicator()))
+                    : Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.grey.shade200),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.01),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          children: [
+                            // Table Headers Row
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                               decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: Colors.grey.shade100),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.01),
-                                    blurRadius: 10,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                ],
+                                color: Colors.grey.shade100,
+                                borderRadius: const BorderRadius.only(
+                                  topLeft: Radius.circular(16),
+                                  topRight: Radius.circular(16),
+                                ),
                               ),
-                              child: Column(
+                              child: Row(
                                 children: [
-                                  // Table Headers Row
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                    decoration: BoxDecoration(
-                                      color: Colors.grey.shade50,
-                                      borderRadius: const BorderRadius.only(
-                                        topLeft: Radius.circular(16),
-                                        topRight: Radius.circular(16),
-                                      ),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        Expanded(
-                                          flex: 3,
-                                          child: Text(
-                                            'الصنف',
-                                            style: GoogleFonts.cairo(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textLight),
-                                          ),
-                                        ),
-                                        Expanded(
-                                          flex: 2,
-                                          child: Text(
-                                            'الاتجاه/الموقع',
-                                            style: GoogleFonts.cairo(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textLight),
-                                          ),
-                                        ),
-                                        Expanded(
-                                          flex: 1,
-                                          child: Text(
-                                            'الكمية',
-                                            textAlign: TextAlign.center,
-                                            style: GoogleFonts.cairo(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textLight),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 48), // Space for action button
-                                      ],
+                                  Expanded(
+                                    flex: 3,
+                                    child: Text(
+                                      'الكود',
+                                      style: GoogleFonts.cairo(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textLight),
                                     ),
                                   ),
-
-                                  // Table Rows list
-                                  ListView.separated(
-                                    shrinkWrap: true,
-                                    physics: const NeverScrollableScrollPhysics(),
-                                    itemCount: _items.length,
-                                    separatorBuilder: (context, index) => const Divider(height: 1),
-                                    itemBuilder: (context, index) {
-                                      final item = _items[index];
-                                      final String itemCode = item['itemCode'] ?? '';
-                                      final String itemName = item['itemNameAr'] ?? 'صنف غير معروف';
-                                      final String location = item['locationName'] ?? item['location'] ?? 'غير محدد';
-                                      final double qty = (item['qty'] ?? 0.0).toDouble();
-                                      final bool isReviewed = item['isDeliveryReviewed'] == 1;
-
-                                      return Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                                        child: Row(
-                                          children: [
-                                            // Item info
-                                            Expanded(
-                                              flex: 3,
-                                              child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    itemName,
-                                                    maxLines: 2,
-                                                    overflow: TextOverflow.ellipsis,
-                                                    style: GoogleFonts.cairo(
-                                                      fontWeight: FontWeight.bold,
-                                                      fontSize: 13,
-                                                      color: AppColors.textDark,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(height: 2),
-                                                  Text(
-                                                    'كود: $itemCode',
-                                                    style: GoogleFonts.cairo(
-                                                      fontSize: 11,
-                                                      color: AppColors.textLight,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                            // Location
-                                            Expanded(
-                                              flex: 2,
-                                              child: Text(
-                                                location,
-                                                style: GoogleFonts.cairo(
-                                                  fontSize: 12,
-                                                  color: Colors.grey.shade800,
-                                                  fontWeight: FontWeight.w500,
-                                                ),
-                                              ),
-                                            ),
-                                            // Quantity
-                                            Expanded(
-                                              flex: 1,
-                                              child: Text(
-                                                qty.toStringAsFixed(qty % 1 == 0 ? 0 : 2),
-                                                textAlign: TextAlign.center,
-                                                style: GoogleFonts.cairo(
-                                                  fontSize: 14,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: AppColors.textDark,
-                                                ),
-                                              ),
-                                            ),
-                                            // Action Button (Checkmark toggle)
-                                            SizedBox(
-                                              width: 48,
-                                              child: IconButton(
-                                                onPressed: _isSavingItemReview ? null : () => _toggleItemReview(item),
-                                                icon: Container(
-                                                  padding: const EdgeInsets.all(4),
-                                                  decoration: BoxDecoration(
-                                                    color: isReviewed ? Colors.green.shade50 : Colors.grey.shade100,
-                                                    shape: BoxShape.circle,
-                                                    border: Border.all(
-                                                      color: isReviewed ? Colors.green.shade300 : Colors.grey.shade300,
-                                                    ),
-                                                  ),
-                                                  child: Icon(
-                                                    Icons.check,
-                                                    size: 18,
-                                                    color: isReviewed ? Colors.green.shade700 : Colors.grey.shade400,
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      );
-                                    },
+                                  Expanded(
+                                    flex: 6,
+                                    child: Text(
+                                      'الاتجاه / الموقع اسم الصنف',
+                                      style: GoogleFonts.cairo(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textLight),
+                                    ),
+                                  ),
+                                  Expanded(
+                                    flex: 3,
+                                    child: Text(
+                                      'الكمية',
+                                      textAlign: TextAlign.center,
+                                      style: GoogleFonts.cairo(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textLight),
+                                    ),
                                   ),
                                 ],
                               ),
                             ),
-                    ],
-                  ),
-                ),
+
+                            // Table Items List
+                            _filteredItems.isEmpty
+                                ? Padding(
+                                    padding: const EdgeInsets.all(24),
+                                    child: Text(
+                                      'لا توجد أصناف مطابقة للبحث',
+                                      style: GoogleFonts.cairo(color: AppColors.textLight),
+                                    ),
+                                  )
+                                : ListView.separated(
+                                    shrinkWrap: true,
+                                    physics: const NeverScrollableScrollPhysics(),
+                                    itemCount: _filteredItems.length,
+                                    separatorBuilder: (context, index) => const Divider(height: 1),
+                                    itemBuilder: (context, index) {
+                                      final item = _filteredItems[index];
+                                      final String itemCode = (item['itemCode'] ?? '').toString();
+                                      final String itemName = (item['itemNameAr'] ?? item['itemName'] ?? 'صنف غير معروف').toString();
+                                      final String location = (item['locationName'] ?? item['itemSide'] ?? item['location'] ?? '').toString();
+                                      final double qtyCounted = double.tryParse(item['qtyCounted']?.toString() ?? '0') ?? 0.0;
+
+                                      return InkWell(
+                                        onTap: () => _showEditQtyDialog(item),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                                          color: index % 2 == 0 ? Colors.white : Colors.grey.shade50.withOpacity(0.5),
+                                          child: Row(
+                                            children: [
+                                              // 1. Code (الكود)
+                                              Expanded(
+                                                flex: 3,
+                                                child: Text(
+                                                  itemCode,
+                                                  style: GoogleFonts.cairo(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: AppColors.textDark,
+                                                  ),
+                                                ),
+                                              ),
+
+                                              // 2. Location & Name (الاتجاه / الموقع اسم الصنف)
+                                              Expanded(
+                                                flex: 6,
+                                                child: Row(
+                                                  children: [
+                                                    if (location.isNotEmpty) ...[
+                                                      Container(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                                        decoration: BoxDecoration(
+                                                          color: Colors.blue.shade50,
+                                                          borderRadius: BorderRadius.circular(6),
+                                                        ),
+                                                        child: Text(
+                                                          location,
+                                                          style: GoogleFonts.cairo(
+                                                            fontSize: 11,
+                                                            color: Colors.blue.shade900,
+                                                            fontWeight: FontWeight.bold,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      const SizedBox(width: 8),
+                                                    ],
+                                                    Expanded(
+                                                      child: Text(
+                                                        itemName,
+                                                        maxLines: 2,
+                                                        overflow: TextOverflow.ellipsis,
+                                                        style: GoogleFonts.cairo(
+                                                          fontWeight: FontWeight.bold,
+                                                          fontSize: 13,
+                                                          color: AppColors.textDark,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+
+                                              // 3. Counted Qty (الكمية)
+                                              Expanded(
+                                                flex: 3,
+                                                child: Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                                  decoration: BoxDecoration(
+                                                    color: qtyCounted > 0 ? Colors.green.shade50 : Colors.grey.shade100,
+                                                    borderRadius: BorderRadius.circular(8),
+                                                    border: Border.all(
+                                                      color: qtyCounted > 0 ? Colors.green.shade300 : Colors.grey.shade300,
+                                                    ),
+                                                  ),
+                                                  child: Row(
+                                                    mainAxisAlignment: MainAxisAlignment.center,
+                                                    children: [
+                                                      Text(
+                                                        qtyCounted.toStringAsFixed(qtyCounted % 1 == 0 ? 0 : 2),
+                                                        style: GoogleFonts.cairo(
+                                                          fontSize: 14,
+                                                          fontWeight: FontWeight.bold,
+                                                          color: qtyCounted > 0 ? Colors.green.shade800 : Colors.grey.shade700,
+                                                        ),
+                                                      ),
+                                                      const SizedBox(width: 4),
+                                                      Icon(
+                                                        Icons.edit,
+                                                        size: 14,
+                                                        color: qtyCounted > 0 ? Colors.green.shade700 : Colors.grey.shade500,
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                          ],
+                        ),
+                      ),
+              ],
+            ),
+          ),
         ),
       ),
     );

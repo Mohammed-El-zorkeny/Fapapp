@@ -1727,10 +1727,18 @@ class ApiService {
   // GET Invoice Details for Review
   Future<Map<String, dynamic>> getInvoiceDetails(int invoiceId) async {
     final url = Uri.parse('$baseUrl/DeliveryReview/GetInvoiceDetails?invoiceId=$invoiceId');
+    print('\n==================================================');
+    print('🚀 [REQUEST] GET $url');
     try {
       final headers = await _authHeaders;
+      print('🔑 Headers: $headers');
+
       final response = await http.get(url, headers: headers);
       final body = utf8.decode(response.bodyBytes);
+      print('📥 [RESPONSE] Status Code: ${response.statusCode}');
+      print('📄 Raw Response Body:\n$body');
+      print('==================================================\n');
+
       final data = json.decode(body);
       if (response.statusCode == 200) {
         return {'success': data['status'] == 'success', 'data': data['items'] ?? []};
@@ -1738,6 +1746,8 @@ class ApiService {
         return {'success': false, 'message': data['messageAr'] ?? 'فشل في تحميل تفاصيل الفاتورة'};
       }
     } catch (e) {
+      print('❌ [EXCEPTION] GetInvoiceDetails Error: $e');
+      print('==================================================\n');
       return {'success': false, 'message': 'خطأ في الاتصال: $e'};
     }
   }
@@ -1805,4 +1815,104 @@ class ApiService {
       return {'success': false, 'message': 'خطأ في الاتصال: $e'};
     }
   }
+
+  // POST Save Item Quantity Count
+  Future<Map<String, dynamic>> saveInvoiceItemCount({
+    required int invoiceId,
+    required int detailId,
+    required double qtyCounted,
+    String? notes,
+  }) async {
+    final url = Uri.parse('$baseUrl/DeliveryReview/SaveItemCount');
+    final payload = {
+      'invoiceId': invoiceId,
+      'detailId': detailId,
+      'qtyCounted': qtyCounted,
+      'notes': notes,
+    };
+
+    print('==================================================');
+    print('🚀 [API Request] POST SaveItemCount');
+    print('URL: $url');
+    print('Payload: ${json.encode(payload)}');
+
+    try {
+      final headers = await _authHeaders;
+      final response = await http.post(
+        url,
+        headers: headers,
+        body: json.encode(payload),
+      );
+
+      final body = utf8.decode(response.bodyBytes);
+      print('📥 [API Response] Status Code: ${response.statusCode}');
+      print('Body: $body');
+      print('==================================================');
+
+      final data = json.decode(body);
+      if (response.statusCode == 200 && data['status'] == 'success') {
+        return {
+          'success': true,
+          'message': data['messageAr'] ?? 'تم حفظ العد بنجاح',
+          'reviewStatus': data['reviewStatus'],
+          'isReviewed': data['isReviewed'],
+          'qtyDifference': data['qtyDifference'],
+          'rawResponse': data,
+        };
+      } else {
+        return {
+          'success': false,
+          'message': data['messageAr'] ?? data['message'] ?? 'فشل في حفظ العد (الكود: ${response.statusCode})',
+          'statusCode': response.statusCode,
+          'rawResponse': data,
+        };
+      }
+    } catch (e) {
+      print('❌ [API Exception] SaveItemCount Error: $e');
+      print('==================================================');
+      return {'success': false, 'message': 'خطأ في الاتصال: $e'};
+    }
+  }
+
+
+  // POST Review All Item Counts (Match All)
+  Future<Map<String, dynamic>> reviewAllItemCounts({required int invoiceId}) async {
+    final url = Uri.parse('$baseUrl/DeliveryReview/ReviewAllItemCounts');
+    try {
+      final headers = await _authHeaders;
+      final response = await http.post(
+        url,
+        headers: headers,
+        body: json.encode({'invoiceId': invoiceId}),
+      );
+      final body = utf8.decode(response.bodyBytes);
+      final data = json.decode(body);
+      if (response.statusCode == 200 && data['status'] == 'success') {
+        return {'success': true, 'message': data['messageAr'] ?? 'تمت مطابقة وتأكيد جميع البنود'};
+      } else {
+        return {'success': false, 'message': data['messageAr'] ?? 'فشل في مراجعة الكل'};
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'خطأ في الاتصال: $e'};
+    }
+  }
+
+  // GET Detailed Item Quantity Counts
+  Future<Map<String, dynamic>> getInvoiceCountDetails(int invoiceId) async {
+    final url = Uri.parse('$baseUrl/DeliveryReview/GetInvoiceCountDetails?invoiceId=$invoiceId');
+    try {
+      final headers = await _authHeaders;
+      final response = await http.get(url, headers: headers);
+      final body = utf8.decode(response.bodyBytes);
+      final data = json.decode(body);
+      if (response.statusCode == 200 && data['status'] == 'success') {
+        return {'success': true, 'data': data['data'] ?? []};
+      } else {
+        return {'success': false, 'message': data['messageAr'] ?? 'فشل في جلب تفاصيل العد'};
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'خطأ في الاتصال: $e'};
+    }
+  }
 }
+

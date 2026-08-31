@@ -1,1 +1,2661 @@
-7
+{
+  "info": {
+    "_postman_id": "0fcd0f04-2e22-49d3-b751-82877b2e43a7",
+    "name": "FAP Auto Apps API -",
+    "description": "نظام كامل مع Auto Save للـ OTP والـ Token",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "28400296",
+    "_collection_link": "https://go.postman.co/collection/28400296-0fcd0f04-2e22-49d3-b751-82877b2e43a7?source=collection_link"
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "1. Request OTP",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = JSON.parse(responseBody);",
+                  "",
+                  "// لو success، احفظ البيانات",
+                  "if (jsonData.status === \"success\") {",
+                  "    ",
+                  "    // حفظ رقم الموبايل من الـ Request",
+                  "    var requestBody = JSON.parse(pm.request.body.raw);",
+                  "    pm.collectionVariables.set(\"phoneNumber\", requestBody.phoneNumber);",
+                  "    ",
+                  "    // حفظ الـ OTP",
+                  "    pm.collectionVariables.set(\"otp\", jsonData.otp);",
+                  "    ",
+                  "    // حفظ بيانات إضافية",
+                  "    pm.collectionVariables.set(\"user_id\", jsonData.id);",
+                  "    pm.collectionVariables.set(\"user_type\", jsonData.type);",
+                  "    ",
+                  "    // طباعة في Console",
+                  "    console.log(\"━━━━━━━━━━━━━━━━━━━━━━━━━━\");",
+                  "    console.log(\"✅ OTP Request Successful!\");",
+                  "    console.log(\"━━━━━━━━━━━━━━━━━━━━━━━━━━\");",
+                  "    console.log(\"📱 Phone: \" + requestBody.phoneNumber);",
+                  "    console.log(\"🔢 OTP: \" + jsonData.otp);",
+                  "    console.log(\"👤 Name: \" + jsonData.nameAr);",
+                  "    console.log(\"🆔 ID: \" + jsonData.id);",
+                  "    console.log(\"💼 Type: \" + jsonData.type);",
+                  "    console.log(\"━━━━━━━━━━━━━━━━━━━━━━━━━━\");",
+                  "    console.log(\"🚀 Auto-calling Verify OTP in 0.5s...\");",
+                  "    console.log(\"━━━━━━━━━━━━━━━━━━━━━━━━━━\");",
+                  "    ",
+                  "    // Test النجاح",
+                  "    pm.test(\"✅ Status is success\", function () {",
+                  "        pm.expect(jsonData.status).to.eql(\"success\");",
+                  "    });",
+                  "    ",
+                  "    pm.test(\"✅ OTP is 6 digits\", function () {",
+                  "        pm.expect(jsonData.otp).to.have.lengthOf(6);",
+                  "    });",
+                  "    ",
+                  "    pm.test(\"✅ User ID exists\", function () {",
+                  "        pm.expect(jsonData.id).to.exist;",
+                  "    });",
+                  "    ",
+                  "    // ⚡ Auto-call Verify OTP",
+                  "    setTimeout(function() {",
+                  "        postman.setNextRequest(\"2. Verify OTP\");",
+                  "    }, 500);",
+                  "    ",
+                  "} else {",
+                  "    console.log(\"❌ Error: \" + jsonData.messageAr);",
+                  "    pm.test(\"❌ Request Failed: \" + jsonData.messageEn, function () {",
+                  "        pm.expect(jsonData.status).to.eql(\"success\");",
+                  "    });",
+                  "}"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phoneNumber\": \"201144081829\"\n}\n\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/requestOtp",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "requestOtp"
+              ]
+            },
+            "description": "طلب OTP - يحفظ رقم الموبايل والـ OTP تلقائياً ثم ينتقل لـ Verify OTP"
+          },
+          "response": []
+        },
+        {
+          "name": "2. Verify OTP",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// Parse الـ Response",
+                  "var jsonData = JSON.parse(responseBody);",
+                  "",
+                  "if (jsonData.status === \"success\") {",
+                  "    ",
+                  "    pm.collectionVariables.set(\"token\", jsonData.token);",
+                  "    ",
+                  "    pm.collectionVariables.set(\"user_id\", jsonData.userId);",
+                  "    pm.collectionVariables.set(\"user_type\", jsonData.userType);",
+                  "    pm.collectionVariables.set(\"user_name_ar\", jsonData.nameAr);",
+                  "    pm.collectionVariables.set(\"user_name_en\", jsonData.nameEn);",
+                  "    pm.collectionVariables.set(\"phone\", jsonData.phone);",
+                  "    pm.collectionVariables.set(\"email\", jsonData.email);",
+                  "    ",
+                  "    if (jsonData.balance) {",
+                  "        pm.collectionVariables.set(\"balance\", jsonData.balance);",
+                  "    }",
+                  "    ",
+                  "    if (jsonData.governorate) {",
+                  "        pm.collectionVariables.set(\"governorate\", jsonData.governorate);",
+                  "    }",
+                  "    ",
+                  "    if (jsonData.evaluation) {",
+                  "        pm.collectionVariables.set(\"evaluation\", jsonData.evaluation);",
+                  "    }",
+                  "    ",
+                  "    console.log(\"🔑 Token: SAVED ✅\");",
+                  "    console.log(\"👤 User: \" + jsonData.nameAr);",
+                  "    console.log(\"📱 Phone: \" + jsonData.phone);",
+                  "    console.log(\"📧 Email: \" + (jsonData.email || 'N/A'));",
+                  "    console.log(\"💼 Type: \" + jsonData.userType);",
+                  "    ",
+                  "    if (jsonData.balance) {",
+                  "        console.log(\"💰 Balance: \" + jsonData.balance + \" EGP\");",
+                  "    }",
+                  "    ",
+                  "    if (jsonData.governorate) {",
+                  "        console.log(\"🏙️ Governorate: \" + jsonData.governorate);",
+                  "    }",
+                  "    ",
+                  "    if (jsonData.evaluation) {",
+                  "        console.log(\"⭐ Evaluation: \" + jsonData.evaluation);",
+                  "    }",
+                  "    ",
+                  "    console.log(\"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\");",
+                  "    console.log(\"✅ Token is now available for all APIs!\");",
+                  "    console.log(\"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\");",
+                  "    ",
+                  "    // Tests",
+                  "    pm.test(\"✅ Login Successful\", function () {",
+                  "        pm.expect(jsonData.status).to.eql(\"success\");",
+                  "    });",
+                  "    ",
+                  "    pm.test(\"✅ Token Received\", function () {",
+                  "        pm.expect(jsonData.token).to.exist;",
+                  "        pm.expect(jsonData.token.length).to.be.above(100);",
+                  "    });",
+                  "    ",
+                  "    pm.test(\"✅ User Data Complete\", function () {",
+                  "        pm.expect(jsonData.userId).to.exist;",
+                  "        pm.expect(jsonData.nameAr).to.exist;",
+                  "        pm.expect(jsonData.phone).to.exist;",
+                  "    });",
+                  "    ",
+                  "} else {",
+                  "    console.log(\"❌ VERIFY FAILED\");",
+                  "",
+                  "    ",
+                  "    if (jsonData.attemptsRemaining !== undefined) {",
+                  "        console.log(\"⚠️ Attempts remaining: \" + jsonData.attemptsRemaining);",
+                  "    }",
+                  "    ",
+                  "    ",
+                  "    pm.test(\"❌ Verify Failed: \" + jsonData.messageEn, function () {",
+                  "        pm.expect(jsonData.status).to.eql(\"success\");",
+                  "    });",
+                  "}"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phoneNumber\": \"201280010010\",\n  \"otp\": \"923594\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/verifyOtp",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "verifyOtp"
+              ]
+            },
+            "description": "التحقق من OTP - يحفظ Token تلقائياً"
+          },
+          "response": []
+        },
+        {
+          "name": "3- Update Device Fcm Token",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJPUkRTIiwic3ViIjoiMjAxMTQ0MDgxODI5IiwiYXVkIjoiU0FMRVMiLCJpYXQiOjE3NjQ0MDIyMjd9.H0fHR1pgkRn0QAzvhfmRJxhXH4mfdgc-duU3a1xSrik"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"deviceToken\": \"fMk8x...FCM_TOKEN_HERE\",\r\n  \"deviceType\": \"android\",\r\n  \"appVersion\": \"1.0.2\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/UpdateDeviceToken",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "UpdateDeviceToken"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "4- My Notifications",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJPUkRTIiwic3ViIjoiMjAxMTQ0MDgxODI5IiwiYXVkIjoiU0FMRVMiLCJpYXQiOjE3NjQ0MDIyMjd9.H0fHR1pgkRn0QAzvhfmRJxhXH4mfdgc-duU3a1xSrik"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/MyNotifications",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "MyNotifications"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "4- Read My Notifications",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJPUkRTIiwic3ViIjoiMjAxMTQ0MDgxODI5IiwiYXVkIjoiU0FMRVMiLCJpYXQiOjE3NjQ0MDIyMjd9.H0fHR1pgkRn0QAzvhfmRJxhXH4mfdgc-duU3a1xSrik"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n \r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/ReadMyNotifications",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "ReadMyNotifications"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "description": "APIs الخاصة بالـ Authentication"
+    },
+    {
+      "name": "Items",
+      "item": [
+        {
+          "name": "1- Get List Group",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJPUkRTIiwic3ViIjoiMjAxMTQ0MDgxODI5IiwiYXVkIjoiU0FMRVMiLCJpYXQiOjE3NjQ0MDIyMjd9.H0fHR1pgkRn0QAzvhfmRJxhXH4mfdgc-duU3a1xSrik"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/Items/getlistGroup",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "Items",
+                "getlistGroup"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "2- Get Stores",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJPUkRTIiwic3ViIjoiMjAxMTQ0MDgxODI5IiwiYXVkIjoiU0FMRVMiLCJpYXQiOjE3NjQ0MDIyMjd9.H0fHR1pgkRn0QAzvhfmRJxhXH4mfdgc-duU3a1xSrik"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/Items/getStores",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "Items",
+                "getStores"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "3- Get Sub Stores",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJPUkRTIiwic3ViIjoiMjAxMTQ0MDgxODI5IiwiYXVkIjoiU0FMRVMiLCJpYXQiOjE3NjQ0MDIyMjd9.H0fHR1pgkRn0QAzvhfmRJxhXH4mfdgc-duU3a1xSrik"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/Items/getSubStores?storeId=1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "Items",
+                "getSubStores"
+              ],
+              "query": [
+                {
+                  "key": "storeId",
+                  "value": "1"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "4- Get Locations",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJPUkRTIiwic3ViIjoiMjAxMTQ0MDgxODI5IiwiYXVkIjoiU0FMRVMiLCJpYXQiOjE3NjQ0MDIyMjd9.H0fHR1pgkRn0QAzvhfmRJxhXH4mfdgc-duU3a1xSrik"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/Items/getLocations?subStoreId=1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "Items",
+                "getLocations"
+              ],
+              "query": [
+                {
+                  "key": "subStoreId",
+                  "value": "1"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "5- Get Card Items",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJPUkRTIiwic3ViIjoiMjAxMTQ0MDgxODI5IiwiYXVkIjoiU0FMRVMiLCJpYXQiOjE3NjQ0MDIyMjd9.H0fHR1pgkRn0QAzvhfmRJxhXH4mfdgc-duU3a1xSrik"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/Items/getCarditemsstcok?itemCode=6300&storeId=1&subStoreId=1&startDate=01-01-2026&endDate=28-02-2026",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "Items",
+                "getCarditemsstcok"
+              ],
+              "query": [
+                {
+                  "key": "itemCode",
+                  "value": "6300"
+                },
+                {
+                  "key": "storeId",
+                  "value": "1"
+                },
+                {
+                  "key": "subStoreId",
+                  "value": "1"
+                },
+                {
+                  "key": "startDate",
+                  "value": "01-01-2026"
+                },
+                {
+                  "key": "endDate",
+                  "value": "28-02-2026"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "5- Get Info Item",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJPUkRTIiwic3ViIjoiMjAxMTQ0MDgxODI5IiwiYXVkIjoiU0FMRVMiLCJpYXQiOjE3NjQ0MDIyMjd9.H0fHR1pgkRn0QAzvhfmRJxhXH4mfdgc-duU3a1xSrik"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/Items/getInfoItem?itemCode=6300",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "Items",
+                "getInfoItem"
+              ],
+              "query": [
+                {
+                  "key": "itemCode",
+                  "value": "6300"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Locations",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJPUkRTIiwic3ViIjoiMjAxMTQ0MDgxODI5IiwiYXVkIjoiU0FMRVMiLCJpYXQiOjE3NjQ0MDIyMjd9.H0fHR1pgkRn0QAzvhfmRJxhXH4mfdgc-duU3a1xSrik"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"itemCode\": \"6297\",\r\n  \"locationId\": 529\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/Items/updateLocations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "Items",
+                "updateLocations"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Profile",
+      "item": [
+        {
+          "name": "Get My Profile",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "var jsonData = JSON.parse(responseBody);",
+                  "",
+                  "if (jsonData.status === \"success\") {",
+                  "    console.log(\"✅ Profile loaded successfully!\");",
+                  "    pm.test(\"✅ Profile loaded\", function () {",
+                  "        pm.expect(jsonData.status).to.eql(\"success\");",
+                  "    });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/profile/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "profile",
+                "me"
+              ]
+            },
+            "description": "بيانات المستخدم الحالي - يستخدم Token تلقائياً"
+          },
+          "response": []
+        },
+        {
+          "name": "Get My Profile Copy",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "var jsonData = JSON.parse(responseBody);",
+                  "",
+                  "if (jsonData.status === \"success\") {",
+                  "    console.log(\"✅ Profile loaded successfully!\");",
+                  "    pm.test(\"✅ Profile loaded\", function () {",
+                  "        pm.expect(jsonData.status).to.eql(\"success\");",
+                  "    });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/profile/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "profile",
+                "me"
+              ]
+            },
+            "description": "بيانات المستخدم الحالي - يستخدم Token تلقائياً"
+          },
+          "response": []
+        }
+      ],
+      "description": "APIs الخاصة بالـ Profile"
+    },
+    {
+      "name": "Price List",
+      "item": [
+        {
+          "name": "1- Get Price List",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJPUkRTIiwic3ViIjoiMjAxMTQ0MDgxODI5IiwiYXVkIjoiU0FMRVMiLCJpYXQiOjE3NjQ0MDIyMjd9.H0fHR1pgkRn0QAzvhfmRJxhXH4mfdgc-duU3a1xSrik"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/priceList/myPriceList",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "priceList",
+                "myPriceList"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "2- Get Items Price List",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJPUkRTIiwic3ViIjoiMjAxMTQ0MDgxODI5IiwiYXVkIjoiU0FMRVMiLCJpYXQiOjE3NjQ0MDIyMjd9.H0fHR1pgkRn0QAzvhfmRJxhXH4mfdgc-duU3a1xSrik"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/priceList/itemsPriceList?priceListId=3",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "priceList",
+                "itemsPriceList"
+              ],
+              "query": [
+                {
+                  "key": "priceListId",
+                  "value": "3"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Order",
+      "item": [
+        {
+          "name": "1- Create Order",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer YOUR_TOKEN"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"priceListId\": 14,\r\n  \"notes\": \"طلب عاجل - التوصيل غداً\",\r\n  \"items\": [\r\n    {\r\n      \"itemId\": 1810,\r\n      \"qty\": 10\r\n    },\r\n    {\r\n      \"itemId\": 1811,\r\n      \"qty\": 5\r\n    },\r\n    {\r\n      \"itemId\": 1812,\r\n      \"qty\": 3\r\n    }\r\n  ]\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/Transactions/CreateRequestInvoice",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "Transactions",
+                "CreateRequestInvoice"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "2- Get Orders",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJPUkRTIiwic3ViIjoiMjAxMTQ0MDgxODI5IiwiYXVkIjoiU0FMRVMiLCJpYXQiOjE3NjQ0MDIyMjd9.H0fHR1pgkRn0QAzvhfmRJxhXH4mfdgc-duU3a1xSrik"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/order/getmuorder?customerId=71",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "order",
+                "getmuorder"
+              ],
+              "query": [
+                {
+                  "key": "customerId",
+                  "value": "71"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get My Invoice",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJPUkRTIiwic3ViIjoiMjAxMTQ0MDgxODI5IiwiYXVkIjoiU0FMRVMiLCJpYXQiOjE3NjQ0MDIyMjd9.H0fHR1pgkRn0QAzvhfmRJxhXH4mfdgc-duU3a1xSrik"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/order/MyInvoices",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "order",
+                "MyInvoices"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get View Invoice Details",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJPUkRTIiwic3ViIjoiMjAxMTQ0MDgxODI5IiwiYXVkIjoiU0FMRVMiLCJpYXQiOjE3NjQ0MDIyMjd9.H0fHR1pgkRn0QAzvhfmRJxhXH4mfdgc-duU3a1xSrik"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/order/ViewInvoiceDetails?invoiceId=1375",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "order",
+                "ViewInvoiceDetails"
+              ],
+              "query": [
+                {
+                  "key": "invoiceId",
+                  "value": "1375"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "3- View Order Details",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJPUkRTIiwic3ViIjoiMjAxMTQ0MDgxODI5IiwiYXVkIjoiU0FMRVMiLCJpYXQiOjE3NjQ0MDIyMjd9.H0fHR1pgkRn0QAzvhfmRJxhXH4mfdgc-duU3a1xSrik"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/Transactions/ViewOrderDetails?orderId=1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "Transactions",
+                "ViewOrderDetails"
+              ],
+              "query": [
+                {
+                  "key": "orderId",
+                  "value": "1"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Order status steps",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJPUkRTIiwic3ViIjoiMjAxMTQ0MDgxODI5IiwiYXVkIjoiU0FMRVMiLCJpYXQiOjE3NjQ0MDIyMjd9.H0fHR1pgkRn0QAzvhfmRJxhXH4mfdgc-duU3a1xSrik"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/Transactions/OrderStatusSteps?orderId=1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "Transactions",
+                "OrderStatusSteps"
+              ],
+              "query": [
+                {
+                  "key": "orderId",
+                  "value": "1"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "4- Update Order",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJPUkRTIiwic3ViIjoiMjAxMTQ0MDgxODI5IiwiYXVkIjoiU0FMRVMiLCJpYXQiOjE3NjQ0MDIyMjd9.H0fHR1pgkRn0QAzvhfmRJxhXH4mfdgc-duU3a1xSrik"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"orderId\": 1,\r\n  \"items\": [\r\n    { \"action\": \"DELETE\", \"dtlId\": 1 }\r\n    // { \"action\": \"UPDATE\", \"dtlId\": 102, \"qty\": 20 },\r\n    // { \"action\": \"ADD\", \"itemId\": 8, \"qty\": 5 }\r\n  ]\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/Transactions/UpdateRequestInvoice",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "Transactions",
+                "UpdateRequestInvoice"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "4- Update Order Copy",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJPUkRTIiwic3ViIjoiMjAxMTQ0MDgxODI5IiwiYXVkIjoiU0FMRVMiLCJpYXQiOjE3NjQ0MDIyMjd9.H0fHR1pgkRn0QAzvhfmRJxhXH4mfdgc-duU3a1xSrik"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"orderId\": 1,\r\n  \"items\": [\r\n    { \"action\": \"DELETE\", \"dtlId\": 1 }\r\n    // { \"action\": \"UPDATE\", \"dtlId\": 102, \"qty\": 20 },\r\n    // { \"action\": \"ADD\", \"itemId\": 8, \"qty\": 5 }\r\n  ]\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/Transactions/UpdateRequestInvoice",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "Transactions",
+                "UpdateRequestInvoice"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "4- Update Notes ByDtlid",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJPUkRTIiwic3ViIjoiMjAxMTQ0MDgxODI5IiwiYXVkIjoiU0FMRVMiLCJpYXQiOjE3NjQ0MDIyMjd9.H0fHR1pgkRn0QAzvhfmRJxhXH4mfdgc-duU3a1xSrik"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"dtlId\": 28941,\r\n  \"notes\": \"محتاج اللون الأسود\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/Transactions/UpdateNotesByDtlid",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "Transactions",
+                "UpdateNotesByDtlid"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Customers",
+      "item": [
+        {
+          "name": "1- Get List Customers",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJPUkRTIiwic3ViIjoiMjAxMTQ0MDgxODI5IiwiYXVkIjoiU0FMRVMiLCJpYXQiOjE3NjQ0MDIyMjd9.H0fHR1pgkRn0QAzvhfmRJxhXH4mfdgc-duU3a1xSrik"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/Customers/List",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "Customers",
+                "List"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "2- Get Statement Customers",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJPUkRTIiwic3ViIjoiMjAxMTQ0MDgxODI5IiwiYXVkIjoiU0FMRVMiLCJpYXQiOjE3NjQ0MDIyMjd9.H0fHR1pgkRn0QAzvhfmRJxhXH4mfdgc-duU3a1xSrik"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/Customers/Statement?customerId=503&startDate=01-01-2026&endDate=25-02-2026",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "Customers",
+                "Statement"
+              ],
+              "query": [
+                {
+                  "key": "customerId",
+                  "value": "503"
+                },
+                {
+                  "key": "startDate",
+                  "value": "01-01-2026"
+                },
+                {
+                  "key": "endDate",
+                  "value": "25-02-2026"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "3- Edit Location",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJPUkRTIiwic3ViIjoiMjAxMTQ0MDgxODI5IiwiYXVkIjoiU0FMRVMiLCJpYXQiOjE3NjQ0MDIyMjd9.H0fHR1pgkRn0QAzvhfmRJxhXH4mfdgc-duU3a1xSrik"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"locationLink\": \"https://maps.google.com/...\",\r\n    \"governorate\": \"القاهرة\",\r\n    \"district\": \"مدينة نصر\",\r\n    \"fullAddress\": \"شارع عباس العقاد، عمارة 15\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/Customers/Editlocation",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "Customers",
+                "Editlocation"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Bank",
+      "item": [
+        {
+          "name": "1- Get List Bank",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJPUkRTIiwic3ViIjoiMjAxMTQ0MDgxODI5IiwiYXVkIjoiU0FMRVMiLCJpYXQiOjE3NjQ0MDIyMjd9.H0fHR1pgkRn0QAzvhfmRJxhXH4mfdgc-duU3a1xSrik"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/Bank/List",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "Bank",
+                "List"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Payment",
+      "item": [
+        {
+          "name": "1- Create Payment",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJPUkRTIiwic3ViIjoiMjAxMTQ0MDgxODI5IiwiYXVkIjoiU0FMRVMiLCJpYXQiOjE3NjQ0MDIyMjd9.H0fHR1pgkRn0QAzvhfmRJxhXH4mfdgc-duU3a1xSrik"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"bankId\": 1,\r\n  \"customerId\": 15,\r\n  \"value\": 5000,\r\n  \"invoiceId\": 200,\r\n  \"salesmanId\": 3,\r\n  \"notes\": \"دفعة على فاتورة رقم 200\",\r\n  \"imageBase64\": \"/9j/4AAQSkZJRg...\",\r\n  \"imageName\": \"payment_receipt.jpg\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/Payment/CreatePayment",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "Payment",
+                "CreatePayment"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GetAllMyPayment",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJPUkRTIiwic3ViIjoiMjAxMTQ0MDgxODI5IiwiYXVkIjoiU0FMRVMiLCJpYXQiOjE3NjQ0MDIyMjd9.H0fHR1pgkRn0QAzvhfmRJxhXH4mfdgc-duU3a1xSrik"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/Payment/GetAllMyPayment",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "Payment",
+                "GetAllMyPayment"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Sales Invoice",
+      "item": [
+        {
+          "name": "1- Get List Invoice By Cust",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJPUkRTIiwic3ViIjoiMjAxMTQ0MDgxODI5IiwiYXVkIjoiU0FMRVMiLCJpYXQiOjE3NjQ0MDIyMjd9.H0fHR1pgkRn0QAzvhfmRJxhXH4mfdgc-duU3a1xSrik"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/salesinvoice/getinvoicebycust?customersId=200",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "salesinvoice",
+                "getinvoicebycust"
+              ],
+              "query": [
+                {
+                  "key": "customersId",
+                  "value": "200"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "3- Get Invoice By AutoNumber",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJPUkRTIiwic3ViIjoiMjAxMTQ0MDgxODI5IiwiYXVkIjoiU0FMRVMiLCJpYXQiOjE3NjQ0MDIyMjd9.H0fHR1pgkRn0QAzvhfmRJxhXH4mfdgc-duU3a1xSrik"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/salesinvoice/GetInvoiceByAutoNumber?autoNumber=S-2025-0001",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "salesinvoice",
+                "GetInvoiceByAutoNumber"
+              ],
+              "query": [
+                {
+                  "key": "autoNumber",
+                  "value": "S-2025-0001"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "1- Get List Items By Invoice",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJPUkRTIiwic3ViIjoiMjAxMTQ0MDgxODI5IiwiYXVkIjoiU0FMRVMiLCJpYXQiOjE3NjQ0MDIyMjd9.H0fHR1pgkRn0QAzvhfmRJxhXH4mfdgc-duU3a1xSrik"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/salesinvoice/getitemsbyinvoice?invoiceId=1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "salesinvoice",
+                "getitemsbyinvoice"
+              ],
+              "query": [
+                {
+                  "key": "invoiceId",
+                  "value": "1"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Purchas Invoice",
+      "item": [
+        {
+          "name": "Get All Invoice",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJPUkRTIiwic3ViIjoiMjAxMTQ0MDgxODI5IiwiYXVkIjoiU0FMRVMiLCJpYXQiOjE3NjQ0MDIyMjd9.H0fHR1pgkRn0QAzvhfmRJxhXH4mfdgc-duU3a1xSrik"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/PurchaseInvoice/GetAllInvoice",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "PurchaseInvoice",
+                "GetAllInvoice"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delivery Invoice",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer "
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"invoiceId\":\"18\",\r\n    \"itemCode\":\"6297\",\r\n    \"qtyReceived\":\"1\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/PurchaseInvoice/DeliveryInvoice",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "PurchaseInvoice",
+                "DeliveryInvoice"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get AllI tems Delivery",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": ""
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/PurchaseInvoice/GetAllItemsDelivery?invoiceId=18",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "PurchaseInvoice",
+                "GetAllItemsDelivery"
+              ],
+              "query": [
+                {
+                  "key": "invoiceId",
+                  "value": "18"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Qty Delivery",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": ""
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"deliveryId\":\"1\",\r\n    \"qtyReceived\":\"1\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/PurchaseInvoice/UpdateQtyDelivery",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "PurchaseInvoice",
+                "UpdateQtyDelivery"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Stock Count",
+      "item": [
+        {
+          "name": "Get Active Sessions",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/StockCount/GetActiveSessions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "StockCount",
+                "GetActiveSessions"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Save Count Detail",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"masterId\": 1,\n    \"itemCode\": \"6297\",\n    \"qtyCounted\": 10,\n    \"location\": 10,\n    \"notes\": \"تجربة الجرد الأولى\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/StockCount/SaveCountDetail",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "StockCount",
+                "SaveCountDetail"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Session Details",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/StockCount/GetSessionDetails?masterId=1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "StockCount",
+                "GetSessionDetails"
+              ],
+              "query": [
+                {
+                  "key": "masterId",
+                  "value": "1"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Count Qty",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"detailId\": 1,\n    \"qtyCounted\": 12,\n    \"notes\": \"تعديل كمية الجرد\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/StockCount/UpdateCountQty",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "StockCount",
+                "UpdateCountQty"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "description": "APIs الخاصة بجرد الأصناف"
+    },
+    {
+      "name": "Return Invoice",
+      "item": [
+        {
+          "name": "1- Create Invoice",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJPUkRTIiwic3ViIjoiMjAxMTQ0MDgxODI5IiwiYXVkIjoiU0FMRVMiLCJpYXQiOjE3NjQ0MDIyMjd9.H0fHR1pgkRn0QAzvhfmRJxhXH4mfdgc-duU3a1xSrik"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"invoiceSalesId\": 2031,\r\n    \"salesmanId\": 5,\r\n    \"items\": [\r\n        {\r\n            \"invoiceDtlId\": 46012,\r\n            \"qty\": 5\r\n        }\r\n    ]\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/ReturnInvoice/CreateInvoice",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ReturnInvoice",
+                "CreateInvoice"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GetMyInvoice",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJPUkRTIiwic3ViIjoiMjAxMTQ0MDgxODI5IiwiYXVkIjoiU0FMRVMiLCJpYXQiOjE3NjQ0MDIyMjd9.H0fHR1pgkRn0QAzvhfmRJxhXH4mfdgc-duU3a1xSrik"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/ReturnInvoice/GetMyInvoice",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ReturnInvoice",
+                "GetMyInvoice"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get  Items All Invoices",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJPUkRTIiwic3ViIjoiMjAxMTQ0MDgxODI5IiwiYXVkIjoiU0FMRVMiLCJpYXQiOjE3NjQ0MDIyMjd9.H0fHR1pgkRn0QAzvhfmRJxhXH4mfdgc-duU3a1xSrik"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/ReturnInvoice/GetItemsAllInvoiceById?invoiceId=2003&returnId=531",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ReturnInvoice",
+                "GetItemsAllInvoiceById"
+              ],
+              "query": [
+                {
+                  "key": "invoiceId",
+                  "value": "2003"
+                },
+                {
+                  "key": "returnId",
+                  "value": "531"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "New Folder",
+      "item": []
+    },
+    {
+      "name": "Advertisements",
+      "item": [
+        {
+          "name": "1- Get All Advertisements",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJPUkRTIiwic3ViIjoiMjAxMTQ0MDgxODI5IiwiYXVkIjoiU0FMRVMiLCJpYXQiOjE3NjQ0MDIyMjd9.H0fHR1pgkRn0QAzvhfmRJxhXH4mfdgc-duU3a1xSrik"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/Advertisements/GetAllAdvertisements?adType=CARD",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "Advertisements",
+                "GetAllAdvertisements"
+              ],
+              "query": [
+                {
+                  "key": "adType",
+                  "value": "CARD"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "2- Update Click Advertisement",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJPUkRTIiwic3ViIjoiMjAxMTQ0MDgxODI5IiwiYXVkIjoiU0FMRVMiLCJpYXQiOjE3NjQ0MDIyMjd9.H0fHR1pgkRn0QAzvhfmRJxhXH4mfdgc-duU3a1xSrik"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"adId\": 1\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/Advertisements/UpdateClickAdvertisement",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "Advertisements",
+                "UpdateClickAdvertisement"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "2- Update Click Advertisement Copy",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJPUkRTIiwic3ViIjoiMjAxMTQ0MDgxODI5IiwiYXVkIjoiU0FMRVMiLCJpYXQiOjE3NjQ0MDIyMjd9.H0fHR1pgkRn0QAzvhfmRJxhXH4mfdgc-duU3a1xSrik"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"adId\": 1\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/Advertisements/UpdateClickAdvertisement",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "Advertisements",
+                "UpdateClickAdvertisement"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create User Screenshot",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJPUkRTIiwic3ViIjoiMjAxMTQ0MDgxODI5IiwiYXVkIjoiU0FMRVMiLCJpYXQiOjE3NjQ0MDIyMjd9.H0fHR1pgkRn0QAzvhfmRJxhXH4mfdgc-duU3a1xSrik"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"captureType\": \"SCREENSHOT\",\r\n  \"deviceType\": \"ANDROID\",\r\n  \"deviceModel\": \"Samsung S24 Ultra\",\r\n  \"osVersion\": \"Android 14\",\r\n  \"appVersion\": \"1.0.2\",\r\n  \"screenName\": \"PriceList\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/Screenshot/CreateUserScreenshot",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "Screenshot",
+                "CreateUserScreenshot"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "6. Delivery Review (مراجعة التسليم)",
+      "item": [
+        {
+          "name": "1. Get Delivery Men",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/DeliveryReview/GetDeliveryMen",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "DeliveryReview",
+                "GetDeliveryMen"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "2. Get Invoices By Date",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/DeliveryReview/GetInvoicesByDate?deliveryDate=2026-07-11",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "DeliveryReview",
+                "GetInvoicesByDate"
+              ],
+              "query": [
+                {
+                  "key": "deliveryDate",
+                  "value": "2026-07-11"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "3. Get Invoice Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/DeliveryReview/GetInvoiceDetails?invoiceId=5001",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "DeliveryReview",
+                "GetInvoiceDetails"
+              ],
+              "query": [
+                {
+                  "key": "invoiceId",
+                  "value": "5001"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "4. Update Invoice Delivery",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceId\": 5001,\n  \"salesmanDeliveryId\": 101,\n  \"deliveryStatus\": \"PENDING_ASSIGNMENT\",\n  \"deliveryNotes\": \"ملاحظات تجريبية\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/DeliveryReview/UpdateInvoiceDelivery",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "DeliveryReview",
+                "UpdateInvoiceDelivery"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "5. Update Item Review",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceId\": 5001,\n  \"detailId\": 12001,\n  \"isReviewed\": 1,\n  \"reviewAll\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/DeliveryReview/UpdateItemReview",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "DeliveryReview",
+                "UpdateItemReview"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "6. Get Salesman Invoices",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/DeliveryReview/GetSalesmanInvoices?deliveryDate=2026-07-11",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "DeliveryReview",
+                "GetSalesmanInvoices"
+              ],
+              "query": [
+                {
+                  "key": "deliveryDate",
+                  "value": "2026-07-11"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "7. Start Delivery Journey",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceId\": 5001,\n  \"latitude\": 30.0444,\n  \"longitude\": 31.2357\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/DeliveryReview/StartDeliveryJourney",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "DeliveryReview",
+                "StartDeliveryJourney"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "8. Add Tracking Point",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceId\": 5001,\n  \"latitude\": 30.0450,\n  \"longitude\": 31.2360,\n  \"bearing\": 45.5,\n  \"batteryLevel\": 85,\n  \"isCharging\": \"N\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/DeliveryReview/AddTrackingPoint",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "DeliveryReview",
+                "AddTrackingPoint"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "9. End Delivery Journey",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceId\": 5001,\n  \"latitude\": 30.0500,\n  \"longitude\": 31.2400,\n  \"totalKm\": 5.4,\n  \"totalMinutes\": 18.2,\n  \"deliveryStatus\": \"DELIVERED_FULL\",\n  \"notes\": \"تم التسليم للعميل باليد\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/DeliveryReview/EndDeliveryJourney",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "DeliveryReview",
+                "EndDeliveryJourney"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "10. Save Item Count",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceId\": 5001,\n  \"detailId\": 12001,\n  \"qtyCounted\": 5.0,\n  \"notes\": \"تم العد بنجاح\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/DeliveryReview/SaveItemCount",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "DeliveryReview",
+                "SaveItemCount"
+              ]
+            },
+            "description": "حفظ/تحديث الكمية المجرودة لصنف في فاتورة المبيعات"
+          },
+          "response": []
+        },
+        {
+          "name": "11. Get Invoice Count Details",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/DeliveryReview/GetInvoiceCountDetails?invoiceId=5001",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "DeliveryReview",
+                "GetInvoiceCountDetails"
+              ],
+              "query": [
+                {
+                  "key": "invoiceId",
+                  "value": "5001"
+                }
+              ]
+            },
+            "description": "جلب أصناف الفاتورة مع الكمية المجرودة والموقع"
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "requests": {},
+        "exec": [
+          ""
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "requests": {},
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://fapautoapps.com/ords/app"
+    },
+    {
+      "key": "otp",
+      "value": "242516"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "user_id",
+      "value": ""
+    },
+    {
+      "key": "user_type",
+      "value": ""
+    },
+    {
+      "key": "user_name_ar",
+      "value": ""
+    },
+    {
+      "key": "user_name_en",
+      "value": ""
+    },
+    {
+      "key": "phone",
+      "value": ""
+    },
+    {
+      "key": "email",
+      "value": ""
+    },
+    {
+      "key": "balance",
+      "value": ""
+    },
+    {
+      "key": "governorate",
+      "value": ""
+    },
+    {
+      "key": "evaluation",
+      "value": ""
+    },
+    {
+      "key": "phoneNumber",
+      "value": ""
+    },
+    {
+      "key": "phone_number",
+      "value": ""
+    }
+  ]
+}
